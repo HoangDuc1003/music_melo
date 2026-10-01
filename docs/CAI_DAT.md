@@ -5,27 +5,78 @@ Có hai cách:
 | | Cách 1: SideStore (miễn phí) | Cách 2: Cài 1 chạm (Ad Hoc) |
 |---|---|---|
 | Chi phí | 0 đ | Tài khoản Apple Developer **99 USD/năm** |
-| Cần app thứ ba | Có (SideStore) | **Không**: mở trang web bằng Safari, bấm Cài đặt |
-| Hết hạn | 7 ngày (gia hạn trong SideStore) | 1 năm (theo hồ sơ Ad Hoc) |
+| Cần app thứ ba | Có (SideStore + LocalDevVPN) | **Không**: mở trang web bằng Safari, bấm Cài đặt |
+| Cần máy tính | Một lần, khoảng 15 phút (iloader) | Một lần, để lấy UDID và tạo chứng chỉ |
+| Hết hạn | 7 ngày, SideStore tự gia hạn trên iPhone | 1 năm (theo hồ sơ Ad Hoc) |
 | Cập nhật bản mới | Bấm Cập nhật trong SideStore | Mở lại trang cài đặt, bấm Cài đặt |
 | Máy cài được | Máy có SideStore | Chỉ iPhone đã đăng ký mã máy (UDID), tối đa 100 máy/năm |
 
 Apple không cho cài file IPA khi chưa được ký. Với Apple ID miễn phí, việc ký bắt buộc phải qua một công cụ như SideStore, AltStore hoặc Sideloadly. Muốn bỏ hẳn công cụ đó thì chỉ còn cách dùng tài khoản trả phí (cách 2).
 
+**Vì sao không làm bản web (Vercel, "Thêm vào MH chính")?**
+
+* Trình duyệt chặn web gọi thẳng YouTube (CORS). Muốn gọi phải có server trung gian, mà YouTube hay chặn IP máy chủ (Vercel, AWS…) bằng lỗi "Sign in to confirm you're not a bot".
+* Web app trên iPhone không tự chuyển sang bài kế khi đã khoá màn hình.
+
+Nghĩa là bản web mất đúng hai thứ quan trọng nhất của Melo: phát nền và chạy không cần server.
+
 ---
 
 ## Cách 1: SideStore (miễn phí)
 
-1. Cài SideStore theo hướng dẫn ở https://sidestore.io. Lần đầu cần máy tính để tạo "pairing file".
-2. iOS 16 trở lên: bật **Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển**.
-3. Thêm "source" của Melo (chỉ làm một lần):
-   * SideStore → **Sources** → **+** → dán:
-     `https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json`
-   * Hoặc mở trang cài đặt (nếu đã bật GitHub Pages, xem bên dưới) rồi bấm **Thêm vào SideStore**.
-4. Trong source **Melo**, bấm **Get**. Các bản sau chỉ cần bấm **Update**.
-5. Mỗi 7 ngày mở SideStore bấm **Refresh**, hoặc bật tự gia hạn bằng Phím tắt (Shortcuts).
+Chỉ cần máy tính **một lần** để cài SideStore. Sau đó cài Melo, cập nhật Melo và gia hạn 7 ngày đều làm ngay trên iPhone.
 
-Không muốn thêm source thì có thể tải **Melo.ipa** ở trang [Releases](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest) rồi mở bằng SideStore.
+### 1. Trên iPhone
+
+* Cài **LocalDevVPN** từ App Store, mở app và cho phép thêm cấu hình VPN.
+* Dùng **Wi‑Fi**, không dùng 4G/5G.
+
+LocalDevVPN cần bật mỗi khi SideStore cài, cập nhật hoặc gia hạn app.
+
+### 2. Trên PC Windows (64-bit)
+
+1. Cài **iTunes bản tải từ Apple**: https://www.apple.com/itunes/download/win64. Nếu iloader vẫn không nhận iPhone, thử app **Apple Devices** trên Microsoft Store.
+2. Cài **iloader** (bản `.msi`) từ https://github.com/nab138/iloader/releases.
+3. Cắm iPhone bằng cáp, bấm **Tin cậy** trên iPhone.
+4. Mở iloader, đăng nhập Apple ID (có thể là Apple ID phụ), chọn iPhone, chọn **Install SideStore (Stable)**.
+
+iloader tự đặt sẵn pairing file nên không phải làm tay.
+
+### 3. Kích hoạt trên iPhone
+
+1. **Cài đặt → Cài đặt chung → Quản lý VPN & Thiết bị**, chọn Apple ID ở mục Ứng dụng nhà phát triển, rồi bấm **Tin cậy**.
+2. **Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển**: bật, máy sẽ khởi động lại.
+3. Mở LocalDevVPN, bấm **Connect**. Mở SideStore, đăng nhập **đúng Apple ID** đã dùng ở iloader.
+4. Tab **My Apps**: bấm nút **7 DAYS** cạnh SideStore để gia hạn lần đầu. Nếu được hỏi tạo chứng chỉ mới, chọn **Yes**.
+
+### 4. Cài Melo (một lần)
+
+1. SideStore → **Sources** → **+** → dán:
+   `https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json`
+   Hoặc mở trang cài đặt (khi đã bật GitHub Pages, xem Cách 2 bước 5) và bấm **Thêm vào SideStore**.
+2. Trong source **Melo**, bấm **Get**.
+
+Các bản sau chỉ cần bấm **Update** trong SideStore.
+
+### 5. Tự gia hạn, không phải nhớ 7 ngày
+
+SideStore tự gia hạn app khi chạy nền. Để chắc chắn hơn, tạo một tự động hoá trong app **Phím tắt**:
+
+1. **Tự động hoá → + → Thời gian trong ngày**, ví dụ 3:00 sáng hằng ngày, lúc máy đang sạc và có Wi‑Fi.
+2. Chọn **Chạy ngay lập tức**, tắt "Thông báo khi chạy".
+3. Thêm tác vụ **Mở ứng dụng → SideStore**.
+
+Điều kiện: LocalDevVPN đang kết nối và có Wi‑Fi. Nếu quá 7 ngày chưa gia hạn, Melo không mở được. Nhạc đã tải vẫn còn; chỉ cần mở SideStore gia hạn là dùng tiếp.
+
+### Giới hạn của Apple ID miễn phí
+
+* Tối đa **3 app tự cài** cùng lúc, tính cả SideStore.
+* Tối đa 10 App ID mỗi 7 ngày.
+
+### Cách khác
+
+* Cài thẳng file: iloader có mục nhập IPA bất kỳ. Tải **Melo.ipa** ở [Releases](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest) rồi cài từ PC. Cách này mỗi 7 ngày phải cắm máy tính lại, nên chỉ hợp để thử nhanh.
+* **TrollStore** cài vĩnh viễn, nhưng chỉ chạy trên iOS 14.0 – 16.6.1, 16.7 RC và 17.0. Không chạy trên iOS 17.0.1 trở lên, kể cả iOS 18 và 26.
 
 ---
 

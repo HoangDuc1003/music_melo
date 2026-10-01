@@ -14,7 +14,10 @@ Kế hoạch: [docs/PLAN.md](docs/PLAN.md) · Ghi chú kỹ thuật: [CLAUDE.md]
 
 Hướng dẫn đầy đủ: **[docs/CAI_DAT.md](docs/CAI_DAT.md)**.
 
-* **Miễn phí (SideStore):** thêm source `https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json` vào SideStore một lần. Sau đó các bản mới chỉ cần bấm **Update** (gia hạn 7 ngày/lần).
+* **Miễn phí (SideStore):**
+  * Cài SideStore bằng **iloader** trên PC, chỉ làm một lần.
+  * Thêm source `https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json` vào SideStore.
+  * Sau đó cập nhật bằng nút **Update**. Gia hạn 7 ngày tự chạy trên iPhone, có thể đặt lịch bằng app Phím tắt.
 * **Cài 1 chạm, không cần app thứ ba:** cần tài khoản Apple Developer (99 USD/năm) và làm theo các bước trong `docs/CAI_DAT.md`. Sau đó chỉ cần mở **https://hoangduc1003.github.io/spoti_music/** bằng Safari rồi bấm **Cài đặt Melo**.
 * Nhạc đã tải và thư viện vẫn còn khi cài bản mới, vì mã app (`com.melo.music`) không đổi.
 * Melo không thể lên App Store (lý do và cách làm hợp lệ: [docs/APP_STORE.md](docs/APP_STORE.md)).
