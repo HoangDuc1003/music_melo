@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
-import { Pause, Play, Shuffle } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, Pause, Play, Shuffle } from 'lucide-react';
+import { enqueueDownloads, removeDownloads, useDownloads } from '@/downloads/manager';
 import { formatTotalDuration } from '@/lib/format';
 import { pause, play, playTracks } from '@/player/controller';
 import type { PlayContext } from '@/player/queue';
 import { usePlayer } from '@/player/store';
 import { useArtworkColor } from '@/ui/hooks';
-import type { TrackMenuTarget } from '@/ui/overlays';
+import { toast, type TrackMenuTarget } from '@/ui/overlays';
 import type { Track } from '@/youtube/types';
 import { Artwork } from './Artwork';
 import { Page } from './Page';
@@ -27,6 +28,10 @@ interface Props {
   headerRight?: ReactNode;
   menuFor?: (index: number) => Omit<TrackMenuTarget, 'track'>;
   empty?: ReactNode;
+  /** ẩn nút "Tải tất cả" (trang Đã tải) */
+  hideDownload?: boolean;
+  /** nội dung thêm giữa hàng nút và danh sách bài */
+  children?: ReactNode;
 }
 
 function sameContext(a: PlayContext | undefined, b: PlayContext): boolean {
@@ -34,11 +39,39 @@ function sameContext(a: PlayContext | undefined, b: PlayContext): boolean {
 }
 
 /** Trang danh sách bài: album, playlist, bài đã thích… (phần đầu lớn, nút Phát/Trộn bài, danh sách). */
-export function CollectionView({ title, subtitle, description, artwork, cover, tracks, context, numbered, actions, headerRight, menuFor, empty }: Props) {
+export function CollectionView({
+  title,
+  subtitle,
+  description,
+  artwork,
+  cover,
+  tracks,
+  context,
+  numbered,
+  actions,
+  headerRight,
+  menuFor,
+  empty,
+  hideDownload = false,
+  children
+}: Props) {
   const color = useArtworkColor(artwork, title);
   const isThis = usePlayer((s) => sameContext(s.context, context));
   const playing = usePlayer((s) => s.playing);
   const total = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
+  const downloaded = useDownloads((s) => tracks.filter((t) => s.rows.get(t.id)?.status === 'done').length);
+  const pending = useDownloads((s) => tracks.filter((t) => ['queued', 'downloading'].includes(s.rows.get(t.id)?.status ?? '')).length);
+  const allDownloaded = tracks.length > 0 && downloaded === tracks.length;
+
+  const onDownload = () => {
+    if (allDownloaded) {
+      if (window.confirm('Xoá các bài đã tải của danh sách này khỏi máy?')) {
+        void removeDownloads(tracks.map((t) => t.id)).then(() => toast('Đã xoá bản tải'));
+      }
+      return;
+    }
+    void enqueueDownloads(tracks).then((n) => toast(n ? `Đang tải ${n} bài về máy` : 'Các bài đang được tải'));
+  };
 
   const onPlay = () => {
     if (isThis) return void (playing ? pause() : play());
@@ -62,7 +95,27 @@ export function CollectionView({ title, subtitle, description, artwork, cover, t
         )}
       </div>
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-        <div className="flex flex-1 items-center gap-1">{actions}</div>
+        <div className="flex flex-1 items-center gap-1">
+          {tracks.length > 0 && !hideDownload && (
+            <button
+              className={`relative p-2 active:scale-90 ${allDownloaded ? 'text-accent' : 'text-subdued'}`}
+              aria-label={allDownloaded ? 'Đã tải tất cả (bấm để xoá)' : 'Tải tất cả'}
+              onClick={onDownload}
+            >
+              {allDownloaded ? (
+                <span className="flex size-[26px] items-center justify-center rounded-full bg-accent">
+                  <ArrowDown size={18} strokeWidth={3} className="text-black" />
+                </span>
+              ) : (
+                <ArrowDownToLine size={26} />
+              )}
+              {pending > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 rounded-full bg-accent px-1 text-[10px] font-bold text-black">{pending}</span>
+              )}
+            </button>
+          )}
+          {actions}
+        </div>
         {tracks.length > 0 && (
           <>
             <button className="p-2 text-subdued active:scale-90" aria-label="Phát ngẫu nhiên" onClick={onShuffle}>
@@ -78,6 +131,7 @@ export function CollectionView({ title, subtitle, description, artwork, cover, t
           </>
         )}
       </div>
+      {children}
       {tracks.length === 0 && empty}
       <div>
         {tracks.map((track, i) => (

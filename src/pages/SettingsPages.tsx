@@ -1,4 +1,6 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { getAutoDownloadLiked, removeAllDownloads, setAutoDownloadLiked, totalDownloadedBytes, useDownloads } from '@/downloads/manager';
+import { formatBytes } from '@/lib/format';
 import { ChevronRight, Copy, Trash2 } from 'lucide-react';
 import { Centered, Page } from '@/components/Page';
 import { db } from '@/lib/db';
@@ -36,8 +38,19 @@ function confirmThen(message: string, action: () => Promise<unknown>, done: stri
   void action().then(() => toast(done));
 }
 
+function useAutoDownloadLiked(): [boolean, (v: boolean) => void] {
+  const [value, setValue] = useState(false);
+  useEffect(() => {
+    void getAutoDownloadLiked().then(setValue);
+  }, []);
+  return [value, (v) => (setValue(v), void setAutoDownloadLiked(v))];
+}
+
 export function SettingsPage() {
   const autoplay = usePlayer((s) => s.autoplay);
+  const rows = useDownloads((s) => s.rows);
+  const doneCount = [...rows.values()].filter((r) => r.status === 'done').length;
+  const [autoLiked, setAutoLiked] = useAutoDownloadLiked();
   return (
     <Page title="Cài đặt" solidHeader>
       <h1 className="px-4 pt-2 text-[24px] font-bold">Cài đặt</h1>
@@ -49,6 +62,18 @@ export function SettingsPage() {
           right={<input type="checkbox" className="toggle" checked={autoplay} onChange={(e) => setAutoplay(e.target.checked)} aria-label="Tự phát bài tương tự" />}
         />
         <Item label="Hẹn giờ tắt" detail="Dừng nhạc sau một khoảng thời gian" onClick={openSleepTimer} />
+      </Section>
+
+      <Section title="Tải về">
+        <Item label="Đã tải" detail={`${doneCount} bài • ${formatBytes(totalDownloadedBytes(rows.values()))}`} onClick={() => navigate({ name: 'downloads' })} />
+        <Item
+          label="Tự tải bài hát đã thích"
+          detail="Bấm ♡ là bài được tải về để nghe offline"
+          right={<input type="checkbox" className="toggle" checked={autoLiked} onChange={(e) => setAutoLiked(e.target.checked)} aria-label="Tự tải bài hát đã thích" />}
+        />
+        {doneCount > 0 && (
+          <Item label="Xoá tất cả bài đã tải" onClick={() => confirmThen('Xoá tất cả bài đã tải khỏi máy?', removeAllDownloads, 'Đã xoá tất cả bài đã tải')} />
+        )}
       </Section>
 
       <Section title="Dữ liệu trên máy">
@@ -105,15 +130,6 @@ export function LogsPage() {
           </div>
         ))}
       </div>
-    </Page>
-  );
-}
-
-export function DownloadsPage() {
-  return (
-    <Page title="Đã tải" solidHeader>
-      <h1 className="px-4 pt-2 text-[24px] font-bold">Đã tải</h1>
-      <Centered>Chưa có bài nào được tải về.</Centered>
     </Page>
   );
 }

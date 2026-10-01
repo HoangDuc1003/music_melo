@@ -1,4 +1,5 @@
-import { Disc3, Heart, HeartOff, ListEnd, ListMinus, ListPlus, ListStart, Radio, UserRound } from 'lucide-react';
+import { ArrowDownToLine, CircleX, Disc3, Heart, HeartOff, ListEnd, ListMinus, ListPlus, ListStart, Radio, UserRound } from 'lucide-react';
+import { enqueueDownloads, removeDownload, retryDownload, useDownloads } from '@/downloads/manager';
 import { joinArtists } from '@/lib/format';
 import { removeFromPlaylist, toggleLike, useIsLiked } from '@/lib/library';
 import { log } from '@/lib/log';
@@ -26,6 +27,7 @@ export function TrackMenu() {
   const liked = useIsLiked(target?.track.id);
   const currentIndex = usePlayer((s) => s.index);
   const track = target?.track;
+  const download = useDownloads((s) => (track ? s.rows.get(track.id) : undefined));
 
   const goTo = (route: Parameters<typeof navigate>[0]) =>
     run(() => {
@@ -52,6 +54,19 @@ export function TrackMenu() {
             onClick={() => run(async () => toast((await toggleLike(track)) ? 'Đã thêm vào Bài hát đã thích' : 'Đã bỏ thích'))}
           />
           <SheetItem icon={<ListPlus size={22} />} label="Thêm vào playlist" onClick={() => openPlaylistPicker([track])} />
+          {!download && (
+            <SheetItem icon={<ArrowDownToLine size={22} />} label="Tải về" onClick={() => run(() => enqueueDownloads([track]), 'Đang tải về máy')} />
+          )}
+          {download?.status === 'error' && (
+            <SheetItem icon={<ArrowDownToLine size={22} />} label="Tải lại (lần trước lỗi)" onClick={() => run(() => retryDownload(track.id), 'Đang tải lại')} />
+          )}
+          {download && download.status !== 'error' && (
+            <SheetItem
+              icon={<CircleX size={22} />}
+              label={download.status === 'done' ? 'Xoá bản đã tải' : 'Huỷ tải'}
+              onClick={() => run(() => removeDownload(track.id), download.status === 'done' ? 'Đã xoá bản tải' : 'Đã huỷ tải')}
+            />
+          )}
           <SheetItem icon={<Radio size={22} />} label="Phát radio từ bài này" onClick={() => run(() => playRadio(track))} />
           {target.queueIndex !== undefined && target.queueIndex !== currentIndex && (
             <SheetItem icon={<ListMinus size={22} />} label="Xoá khỏi hàng chờ" onClick={() => run(() => removeAt(target.queueIndex!))} />

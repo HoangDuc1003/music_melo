@@ -13,6 +13,7 @@ import {
 import { db, rememberTracks } from '@/lib/db';
 import { joinArtists } from '@/lib/format';
 import { log } from '@/lib/log';
+import { isOnline, setNetworkStatus } from '@/lib/network';
 import { getUpNext } from '@/youtube/music';
 import { clearAudioCache, getCachedAudio, resolveAudio, StreamError } from '@/youtube/stream';
 import type { Track } from '@/youtube/types';
@@ -42,9 +43,14 @@ const HISTORY_DEDUPE_MS = 60_000;
 type FileUrlProvider = (trackId: string) => Promise<string | undefined>;
 
 let fileUrlProvider: FileUrlProvider = async () => undefined;
-/** Phần tải về (GĐ4) cung cấp đường dẫn file đã tải để native phát offline. */
+let artworkFileProvider: FileUrlProvider = async () => undefined;
+/** Phần tải về cung cấp đường dẫn file đã tải để native phát offline. */
 export function setFileUrlProvider(provider: FileUrlProvider) {
   fileUrlProvider = provider;
+}
+/** Ảnh bìa đã tải (file://) cho màn hình khoá khi không có mạng. */
+export function setArtworkFileProvider(provider: FileUrlProvider) {
+  artworkFileProvider = provider;
 }
 
 /** Link đã gửi cho native theo id (để không gửi lại và biết bài nào còn thiếu). */
@@ -76,6 +82,7 @@ function errorMessage(err: unknown): string {
 
 async function toItem(track: Track): Promise<PlayerItem> {
   const fileUrl = await fileUrlProvider(track.id).catch(() => undefined);
+  const localArt = fileUrl ? await artworkFileProvider(track.id).catch(() => undefined) : undefined;
   if (fileUrl) localFiles.add(track.id);
   else localFiles.delete(track.id);
   const cached = getCachedAudio(track.id);
@@ -88,7 +95,7 @@ async function toItem(track: Track): Promise<PlayerItem> {
     title: track.title,
     artist: joinArtists(track.artists),
     album: track.album?.name,
-    artwork: track.thumbnail || undefined,
+    artwork: (isOnline() ? track.thumbnail : localArt) || track.thumbnail || localArt || undefined,
     duration: track.duration > 0 ? track.duration : undefined
   };
 }
@@ -207,7 +214,7 @@ async function onQueueEnded() {
 /** Còn ≤3 bài thì nối radio (YouTube Music automix) từ bài cuối hàng chờ. */
 export async function maybeAppendRadio(): Promise<boolean> {
   const { entries, index, repeat, autoplay } = usePlayer.getState();
-  if (!autoplay || radioBusy || !shouldAppendRadio(entries.length, index, repeat)) return false;
+  if (!autoplay || radioBusy || !isOnline() || !shouldAppendRadio(entries.length, index, repeat)) return false;
   const seed = entries[entries.length - 1].track;
   if (radioFailedSeed === seed.id) return false;
   radioBusy = true;
@@ -320,8 +327,24 @@ async function insertEntries(newEntries: QueueEntry[], at: number, mode: InsertM
 }
 
 /** Phát danh sách bài (album, playlist, kết quả tìm kiếm…) từ `startIndex`. */
+/** Không có mạng: chỉ giữ các bài đã tải. Bài được chọn chưa tải thì không phát gì. */
+async function offlinePlayable(tracks: Track[], startIndex: number): Promise<{ tracks: Track[]; startIndex: number; error?: string }> {
+  const available = await Promise.all(tracks.map(async (t) => Boolean(await fileUrlProvider(t.id).catch(() => undefined))));
+  if (!available[startIndex]) return { tracks: [], startIndex: 0, error: 'Không có mạng. Bài này chưa được tải về máy.' };
+  const kept = tracks.filter((_, i) => available[i]);
+  return { tracks: kept, startIndex: kept.indexOf(tracks[startIndex]) };
+}
+
 export async function playTracks(tracks: Track[], startIndex = 0, options: { context?: PlayContext; shuffle?: boolean } = {}) {
   if (!tracks.length) return;
+  if (!isOnline()) {
+    const playable = await offlinePlayable(tracks, Math.min(Math.max(startIndex, 0), tracks.length - 1));
+    if (playable.error) {
+      set({ error: playable.error });
+      return;
+    }
+    ({ tracks, startIndex } = playable);
+  }
   const shuffle = options.shuffle ?? usePlayer.getState().shuffle;
   let entries = makeEntries(tracks);
   let index = Math.min(Math.max(startIndex, 0), entries.length - 1);
@@ -503,15 +526,19 @@ async function watchNetwork() {
   try {
     const status = await Network.getStatus();
     lastConnectionType = status.connectionType;
+    setNetworkStatus(status.connected, status.connectionType);
     await Network.addListener('networkStatusChange', (s) => {
       const changed = s.connectionType !== lastConnectionType;
       lastConnectionType = s.connectionType;
+      setNetworkStatus(s.connected, s.connectionType);
       if (!changed || !s.connected) return;
       // Link YouTube gắn với IP: đổi Wi-Fi ↔ 4G thì link cũ hỏng, phải lấy lại.
       log.info('player', `mạng đổi sang ${s.connectionType}: lấy lại link`);
       clearAudioCache();
       sentUrls.clear();
+      radioFailedSeed = undefined;
       void ensureUpcomingUrls();
+      void maybeAppendRadio();
     });
   } catch (err) {
     log.warn('player', 'không theo dõi được mạng:', err);
@@ -555,6 +582,8 @@ export function __resetPlayerForTests(options: { sleep?: (ms: number) => Promise
   snapshotTimer = undefined;
   initialized = undefined;
   fileUrlProvider = async () => undefined;
+  artworkFileProvider = async () => undefined;
+  setNetworkStatus(true, 'unknown');
   sleepFn = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   usePlayer.setState({ ...initialPlayerState }, true);
 }

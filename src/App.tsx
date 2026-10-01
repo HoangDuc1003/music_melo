@@ -15,7 +15,9 @@ import { AlbumPage, HistoryPage, LikedPage, LocalPlaylistPage, PlaylistPage } fr
 import { HomePage } from '@/pages/HomePage';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { SearchPage } from '@/pages/SearchPage';
-import { DownloadsPage, LogsPage, SettingsPage } from '@/pages/SettingsPages';
+import { DownloadsPage } from '@/pages/DownloadsPage';
+import { LogsPage, SettingsPage } from '@/pages/SettingsPages';
+import { useNetwork } from '@/lib/network';
 import { useNav, type NavEntry, type Route, type Tab } from '@/ui/nav';
 
 function renderRoute(route: Route): ReactNode {
@@ -83,6 +85,7 @@ const StackPage = memo(function StackPage({ entry, tab, depth, visible }: { entr
 export default function App() {
   const activeTab = useNav((s) => s.tab);
   const stacks = useNav((s) => s.stacks);
+  const online = useNetwork((s) => s.online);
 
   return (
     <div className="flex h-full flex-col bg-base">
@@ -95,6 +98,11 @@ export default function App() {
       </main>
       <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
         <div className="pointer-events-auto bg-gradient-to-t from-black via-black/95 to-transparent pt-6">
+          {!online && (
+            <div className="mx-2 mb-2 rounded-md bg-highlight px-3 py-1.5 text-center text-[12px] text-subdued">
+              Đang offline — chỉ phát được bài đã tải
+            </div>
+          )}
           <MiniPlayer />
           <TabBar />
         </div>

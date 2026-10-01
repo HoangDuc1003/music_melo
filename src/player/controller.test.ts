@@ -395,6 +395,23 @@ describe('mạng', () => {
   });
 });
 
+describe('offline', () => {
+  it('không có mạng thì chỉ phát bài đã tải', async () => {
+    player.setFileUrlProvider(async (id) => (id === 'b' || id === 'c' ? `file:///music/${id}.m4a` : undefined));
+    for (const fn of network.listeners) fn({ connected: false, connectionType: 'none' });
+    await player.playTracks(tracks('a', 'b', 'c'), 2);
+    expect(storeIds()).toEqual(['b', 'c']);
+    expect(usePlayer.getState().index).toBe(1);
+    expect(native.state.items.map((i) => i.fileUrl)).toEqual(['file:///music/b.m4a', 'file:///music/c.m4a']);
+
+    native.plugin.setQueue.mockClear();
+    await player.playTracks(tracks('a', 'b', 'c'), 0);
+    expect(native.plugin.setQueue).not.toHaveBeenCalled();
+    expect(usePlayer.getState().error).toMatch(/chưa được tải/);
+    expect(youtube.getUpNext).not.toHaveBeenCalled();
+  });
+});
+
 describe('lịch sử', () => {
   it('ghi lịch sử khi đổi bài, không ghi trùng khi nạp lại cùng bài', async () => {
     const { db } = await import('@/lib/db');

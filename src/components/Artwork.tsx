@@ -9,13 +9,16 @@ interface Props {
   round?: boolean;
   /** ảnh ở đầu trang: tải ngay, không lazy */
   eager?: boolean;
+  /** ảnh dự phòng (ảnh bìa đã tải về máy) khi ảnh trên mạng lỗi */
+  fallbackSrc?: string;
 }
 
 /** Ảnh bìa có ô giữ chỗ khi chưa có ảnh hoặc ảnh lỗi (offline). */
-export function Artwork({ src, alt = '', className = '', round = false, eager = false }: Props) {
-  const [failed, setFailed] = useState<string>();
+export function Artwork({ src: primary, alt = '', className = '', round = false, eager = false, fallbackSrc }: Props) {
+  const [failed, setFailed] = useState<string[]>([]);
   const shape = round ? 'rounded-full' : 'rounded';
-  if (!src || failed === src) {
+  const src = [primary, fallbackSrc].find((s) => s && !failed.includes(s));
+  if (!src) {
     return (
       <div className={`flex items-center justify-center bg-highlight text-subdued ${shape} ${className}`} aria-hidden>
         <Music className="size-1/3 min-h-4 min-w-4" />
@@ -30,7 +33,7 @@ export function Artwork({ src, alt = '', className = '', round = false, eager = 
       loading={eager ? 'eager' : 'lazy'}
       decoding="async"
       referrerPolicy="no-referrer"
-      onError={() => setFailed(src)}
+      onError={() => setFailed((list) => [...list, src])}
       className={`bg-highlight object-cover ${shape} ${className}`}
     />
   );
