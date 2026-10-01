@@ -189,6 +189,28 @@ describe('hàng đợi tải', () => {
     expect(await enqueueDownloads([track(2)])).toBe(1);
   });
 
+  it('gom sự kiện tiến độ: hiện thanh ngay, sau đó tối đa 4 lần/giây', async () => {
+    let release!: () => void;
+    storage.gate = new Promise((r) => (release = r));
+    await enqueueDownloads([track(1)]);
+    await waitUntil(() => storage.running === 1);
+    const id = track(1).id;
+    expect(useDownloads.getState().progress.get(id)).toEqual({ bytes: 500, total: 1000 });
+
+    let updates = 0;
+    const unsubscribe = useDownloads.subscribe((s, prev) => {
+      if (s.progress !== prev.progress) updates += 1;
+    });
+    for (let bytes = 501; bytes <= 900; bytes++) storage.requests[0].onProgress({ bytes, total: 1000 });
+    expect(updates).toBe(0);
+    await waitUntil(() => useDownloads.getState().progress.get(id)?.bytes === 900);
+    expect(updates).toBe(1);
+    unsubscribe();
+    release();
+    await waitForIdleForTests();
+    expect(useDownloads.getState().progress.has(id)).toBe(false);
+  });
+
   it('xoá trong lúc đang tải thì không giữ file', async () => {
     let release!: () => void;
     storage.gate = new Promise((r) => (release = r));

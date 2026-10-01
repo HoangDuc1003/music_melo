@@ -11,6 +11,7 @@
     "build:web": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "check:bundle": "node scripts/check-bundle.mjs dist --max-js 170 --max-css 12",
     "preview": "vite preview",
     "sync": "vite build && cap sync ios"
   },

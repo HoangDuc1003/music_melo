@@ -18,8 +18,8 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
 - `appId` `com.melo.music` must never change (downloads live in the app container).
 - Repo `HoangDuc1003/spoti_music` is **public**: never commit secrets.
 
-## Status (2026-10-01, session 2 — 5 closed loops done, CI green each round)
-Done and verified (62 vitest, 15 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
+## Status (2026-10-01, session 2 — 10 closed loops done, CI green each round)
+Done and verified (85 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
 - **Swift plugin** `plugins/player/` (package `CapacitorMeloPlayer`):
   - `ios/Sources/MeloPlayerCore/` — pure Swift: `PlayerQueue`, `QueueItem`/`PlaybackSource` (file first, remote
     **https only**), `artworkURL` (https/file only), `RetryPolicy` (needsUrl once → error+skip; stop after skipping the
@@ -69,8 +69,11 @@ Done and verified (62 vitest, 15 XCTest, Playwright screenshot runs at 390×844 
   + localhost-only unless `MELO_LAN=1`, BotGuard interpreter URL must be `https://(www.)google.com/js/…`
   (`trustedInterpreterUrl`), log redaction (`redact()` in `lib/log.ts`: googlevideo URLs, tokens, secrets, IPs),
   YouTube link parser validates ids (`youtube/links.ts`).
-- **Smoothness**: youtubei.js + BotGuard lazy-loaded (initial JS 482 KB / 150 KB gzip), right-sized artwork
-  (`lib/images.ts`), `content-visibility` rows, rAF position (~15 fps) only while visible.
+- **Smoothness**: youtubei.js + BotGuard lazy-loaded (initial JS 477 KB / 147 KB gzip; **CI budget** `npm run
+  check:bundle` = `scripts/check-bundle.mjs`, fails above 170 KB JS / 12 KB CSS gzip for what index.html loads
+  eagerly), right-sized artwork (`lib/images.ts`), `content-visibility` rows, rAF position (~15 fps) only while
+  visible. Download progress is coalesced (first event + completion immediate, otherwise ≤4 store updates/s); the
+  Downloads page (always mounted) only re-renders tiny `DownloadStatusLine` / memo `PendingRow` subscribers.
 - `npm run dev:mock` (aliases `@/youtube/{music,stream,http}` → `src/youtube/mock/`) for UI work without YouTube.
 
 NOT verified on a real iPhone yet (no device here): background playback across tracks, lock screen, FileTransfer

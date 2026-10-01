@@ -74,6 +74,30 @@ let pumpTimer: ReturnType<typeof setTimeout> | undefined;
 let ticker: ReturnType<typeof setInterval> | undefined;
 let startGapMs = START_GAP_MS;
 
+/**
+ * 15 bài tải cùng lúc có thể bắn hàng trăm sự kiện tiến độ mỗi giây: gom lại, cập nhật giao diện tối đa 4 lần/giây.
+ * Lần đầu (hiện thanh tiến độ) và lúc xong (bỏ thanh) thì cập nhật ngay.
+ */
+const PROGRESS_FLUSH_MS = 250;
+const pendingProgress = new Map<string, DownloadProgress | undefined>();
+let progressTimer: ReturnType<typeof setTimeout> | undefined;
+
+function flushProgress() {
+  clearTimeout(progressTimer);
+  progressTimer = undefined;
+  if (!pendingProgress.size) return;
+  const updates = [...pendingProgress];
+  pendingProgress.clear();
+  useDownloads.setState((s) => {
+    const progress = new Map(s.progress);
+    for (const [id, p] of updates) {
+      if (p) progress.set(id, p);
+      else progress.delete(id);
+    }
+    return { progress };
+  });
+}
+
 function setProgress(id: string, p: DownloadProgress | undefined) {
   if (p) {
     const delta = p.bytes - (lastBytes.get(id) ?? 0);
@@ -82,12 +106,9 @@ function setProgress(id: string, p: DownloadProgress | undefined) {
   } else {
     lastBytes.delete(id);
   }
-  useDownloads.setState((s) => {
-    const progress = new Map(s.progress);
-    if (p) progress.set(id, p);
-    else progress.delete(id);
-    return { progress };
-  });
+  pendingProgress.set(id, p);
+  if (!p || !useDownloads.getState().progress.has(id)) flushProgress();
+  else progressTimer ??= setTimeout(flushProgress, PROGRESS_FLUSH_MS);
 }
 
 function errorMessage(err: unknown): string {
@@ -390,6 +411,9 @@ export function __resetDownloadsForTests(options: { limiter?: AdaptiveLimiter; s
   pumpTimer = undefined;
   clearInterval(ticker);
   ticker = undefined;
+  clearTimeout(progressTimer);
+  progressTimer = undefined;
+  pendingProgress.clear();
   lastStartAt = 0;
   startGapMs = options.startGapMs ?? 0;
   limiter = options.limiter ?? new AdaptiveLimiter({ initial: 3, max: HARD_MAX });
