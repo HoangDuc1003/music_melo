@@ -1,11 +1,13 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { installGlobalErrorLogging } from '@/lib/log';
+import { installGlobalErrorLogging, log } from '@/lib/log';
+import { initPlayer } from '@/player/controller';
 import App from './App';
 import './styles.css';
 
 installGlobalErrorLogging();
+void initPlayer().catch((err) => log.error('player', 'khởi động trình phát lỗi:', err));
 
 const queryClient = new QueryClient({
   defaultOptions: {

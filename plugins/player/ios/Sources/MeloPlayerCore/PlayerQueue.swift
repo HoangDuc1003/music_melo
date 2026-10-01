@@ -131,6 +131,7 @@ public struct RetryPolicy {
     }
 
     private var retried: Set<String> = []
+    private var consecutiveSkips = 0
 
     public init() {}
 
@@ -139,13 +140,27 @@ public struct RetryPolicy {
         return retried.insert(id).inserted ? .requestUrl : .skip
     }
 
+    /// Ghi nhận một lần bỏ qua bài lỗi. Trả về true nếu đã bỏ qua liên tiếp cả hàng chờ
+    /// (mọi bài đều lỗi, ví dụ mất mạng khi đang lặp lại) → phải dừng thay vì chuyển bài mãi.
+    public mutating func registerSkip(queueCount: Int) -> Bool {
+        consecutiveSkips += 1
+        return consecutiveSkips >= max(queueCount, 1)
+    }
+
+    /// Có bài phát được: đếm lại từ đầu.
+    public mutating func playbackStarted() {
+        consecutiveSkips = 0
+    }
+
     /// Bài phát hết trọn vẹn: link lần sau hết hạn thì lại được xin link mới.
     public mutating func completed(id: String) {
         retried.remove(id)
+        consecutiveSkips = 0
     }
 
     public mutating func reset() {
         retried.removeAll()
+        consecutiveSkips = 0
     }
 }
 

@@ -380,7 +380,17 @@ final class MeloAudioEngine: NSObject {
             updateNowPlaying()
         case .skip:
             emit?("error", ["index": queue.index, "id": item.id, "message": message])
-            advance(manual: false)
+            if retry.registerSkip(queueCount: queue.count) {
+                // Cả hàng chờ đều lỗi (thường do mất mạng): dừng, không chuyển bài mãi.
+                log("Mọi bài đều lỗi: dừng phát")
+                retry.reset() // bấm phát lại (khi có mạng) thì mỗi bài lại được xin link mới
+                playWhenReady = false
+                player.replaceCurrentItem(with: nil)
+                emitState(force: true)
+                updateNowPlaying()
+            } else {
+                advance(manual: false)
+            }
         }
     }
 
@@ -558,8 +568,10 @@ final class MeloAudioEngine: NSObject {
     private func observePlayer() {
         timeControlObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in
             DispatchQueue.main.async {
-                self?.emitState(force: true)
-                self?.updateNowPlaying()
+                guard let self else { return }
+                if self.player.timeControlStatus == .playing { self.retry.playbackStarted() }
+                self.emitState(force: true)
+                self.updateNowPlaying()
             }
         }
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 1, preferredTimescale: 10), queue: .main) { [weak self] _ in

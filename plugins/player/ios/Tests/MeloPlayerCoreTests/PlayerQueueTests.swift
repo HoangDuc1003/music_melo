@@ -215,6 +215,21 @@ final class PolicyTests: XCTestCase {
         XCTAssertEqual(policy.onFailure(id: "b", usedFile: false), .requestUrl)
     }
 
+    func testStopsAfterSkippingWholeQueue() {
+        var policy = RetryPolicy()
+        XCTAssertFalse(policy.registerSkip(queueCount: 3))
+        XCTAssertFalse(policy.registerSkip(queueCount: 3))
+        policy.playbackStarted()
+        XCTAssertFalse(policy.registerSkip(queueCount: 3))
+        XCTAssertFalse(policy.registerSkip(queueCount: 3))
+        XCTAssertTrue(policy.registerSkip(queueCount: 3))
+
+        policy.reset()
+        XCTAssertTrue(policy.registerSkip(queueCount: 1))
+        policy.completed(id: "a")
+        XCTAssertTrue(policy.registerSkip(queueCount: 0))
+    }
+
     func testSleepTimer() {
         var timer = SleepTimer()
         let start = Date(timeIntervalSince1970: 1_000)
