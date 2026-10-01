@@ -7,7 +7,8 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
 ## Hard decisions (user-approved, do not revisit)
 - **No server, phone only.** Everything runs on the iPhone: Capacitor app, `youtubei.js` calls YouTube
   through native HTTP (`CapacitorHttp`, no CORS, phone's own IP). Never propose a backend.
-- **iPhone only**, personal use, **not** for the App Store (Apple 5.2.3 / YouTube API policy).
+- **iPhone only**, personal use, **not** for the App Store (Apple 5.2.3 / 5.2.2 / 2.5.2, YouTube ToS — full analysis
+  and the legit "store flavor" path in `docs/APP_STORE.md`; privacy policy draft `docs/privacy-policy.md`).
   User has **no Mac**: iOS builds go through GitHub Actions (macOS runner, unsigned IPA) → installed with
   **SideStore** (free Apple ID, 7-day refresh).
 - Background playback must be **native** (Swift plugin owns the queue): iOS suspends WebView JS in background.
