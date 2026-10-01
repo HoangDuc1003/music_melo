@@ -16,7 +16,7 @@
 [![Cài lên iPhone](https://img.shields.io/badge/📲_Cài_lên_iPhone-Xem_hướng_dẫn_có_hình-1ed760?style=for-the-badge)](#cai-dat)
 [![Tải bản mới nhất](https://img.shields.io/badge/⬇️_Bản_mới_nhất-Melo.ipa-white?style=for-the-badge&logo=github&logoColor=black)](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest)
 
-[![Build iOS](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml/badge.svg?branch=claude/spotify-iphone-music-app-3vlzk9)](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml)
+[![Build iOS](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml/badge.svg?branch=main)](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml)
 
 </div>
 
