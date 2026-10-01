@@ -488,9 +488,7 @@ final class MeloAudioEngine: NSObject {
         artwork = nil
         artworkTask?.cancel()
         artworkTask = nil
-        guard let value else { return }
-        let url = value.hasPrefix("/") ? URL(fileURLWithPath: value) : URL(string: value)
-        guard let url else { return }
+        guard let value, let url = artworkURL(value) else { return }
         if url.isFileURL {
             if let image = UIImage(contentsOfFile: url.path) { applyArtwork(image, key: value) }
             return

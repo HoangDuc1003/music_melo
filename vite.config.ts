@@ -29,13 +29,20 @@ function devProxy(): Plugin {
         if (!req.url?.startsWith(PROXY_PREFIX)) return next();
         const rest = req.url.slice(PROXY_PREFIX.length);
         const slash = rest.indexOf('/');
-        const host = slash === -1 ? rest : rest.slice(0, slash);
-        if (!ALLOWED_HOST.test(host)) {
+        const host = (slash === -1 ? rest : rest.slice(0, slash)).toLowerCase();
+        const target = `https://${host}${slash === -1 ? '/' : rest.slice(slash)}`;
+        // Chỉ nhận tên miền thuần (không @ ? # : …) và URL dựng ra phải trỏ đúng tên miền đó (chống SSRF).
+        let targetHost = '';
+        try {
+          targetHost = new URL(target).hostname;
+        } catch {
+          // để targetHost rỗng → bị chặn bên dưới
+        }
+        if (!/^[a-z0-9.-]+$/.test(host) || !ALLOWED_HOST.test(host) || targetHost !== host) {
           res.statusCode = 403;
           res.end('host not allowed');
           return;
         }
-        const target = `https://${host}${slash === -1 ? '/' : rest.slice(slash)}`;
         const headers: Record<string, string> = {};
         for (const [key, value] of Object.entries(req.headers)) {
           if (!DROP_REQUEST_HEADERS.has(key) && typeof value === 'string') headers[key] = value;
@@ -59,11 +66,42 @@ function devProxy(): Plugin {
   };
 }
 
+/**
+ * Content-Security-Policy cho bản build (không áp dụng lúc dev vì Vite cần script nội tuyến cho HMR).
+ * - script: chỉ file của app; 'unsafe-eval' bắt buộc cho youtubei.js (giải mã link) và BotGuard (PO token).
+ * - connect: mọi request mạng đi qua HTTP native (CapacitorHttp/FileTransfer), WebView không cần gọi ra ngoài.
+ * - img/media: ảnh bìa từ máy chủ ảnh của Google (https), ảnh/nhạc đã tải (blob:, capacitor://localhost).
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "media-src 'self' blob: https:",
+  "font-src 'self' data:",
+  "connect-src 'self' blob: data:",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'none'",
+  "frame-src 'none'",
+  "worker-src 'self' blob:"
+].join('; ');
+
+function contentSecurityPolicy(): Plugin {
+  return {
+    name: 'melo-csp',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`);
+    }
+  };
+}
+
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
 const src = fileURLToPath(new URL('./src', import.meta.url));
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), devProxy()],
+  plugins: [react(), tailwindcss(), devProxy(), contentSecurityPolicy()],
   resolve: {
     alias: [
       // `vite --mode mock`: dữ liệu mẫu thay cho YouTube (chạy thử/chụp giao diện khi không vào được YouTube).
@@ -84,7 +122,8 @@ export default defineConfig(({ mode }) => ({
     target: ['es2022', 'safari15'],
     chunkSizeWarningLimit: 2500
   },
-  server: { host: true, port: 5173 },
+  // Mặc định chỉ mở trên máy này; MELO_LAN=1 để mở cho điện thoại cùng Wi-Fi thử (proxy dev cũng lộ ra mạng LAN).
+  server: { host: process.env.MELO_LAN === '1', port: 5173 },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],

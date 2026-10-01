@@ -7,7 +7,21 @@ import { log } from '@/lib/log';
 import { getBrowseSession } from './client';
 import { appFetch } from './http';
 
+// Hằng số công khai có trong mã JS của YouTube web (không phải bí mật), xem .gitleaks.toml.
 const REQUEST_KEY = 'O43z0dpjhgX20SCx4KAo';
+
+/**
+ * URL mã BotGuard lấy từ phản hồi của YouTube; trước khi chạy (new Function) phải chắc chắn
+ * nó nằm trên máy chủ Google qua HTTPS, không phải một địa chỉ bất kỳ.
+ */
+export function trustedInterpreterUrl(raw: string | undefined): string {
+  if (!raw) throw new Error('Thiếu URL BotGuard');
+  const url = new URL(raw.startsWith('//') ? `https:${raw}` : raw);
+  if (url.protocol !== 'https:' || !/^(www\.)?google\.com$/.test(url.hostname) || !url.pathname.startsWith('/js/')) {
+    throw new Error(`URL BotGuard lạ: ${url.hostname}`);
+  }
+  return url.toString();
+}
 
 interface MinterState {
   minter: WebPoMinter;
@@ -27,8 +41,9 @@ async function createMinter(): Promise<MinterState> {
   const challenge = await yt.getAttestationChallenge('ENGAGEMENT_TYPE_UNBOUND');
   const bg = challenge.bg_challenge;
   if (!bg) throw new Error('Không lấy được BotGuard challenge');
-  const interpreterUrl = bg.interpreter_url.private_do_not_access_or_else_trusted_resource_url_wrapped_value;
-  const interpreterJs = await (await appFetch(`https:${interpreterUrl}`)).text();
+  const interpreterUrl = trustedInterpreterUrl(bg.interpreter_url.private_do_not_access_or_else_trusted_resource_url_wrapped_value);
+  const interpreterJs = await (await appFetch(interpreterUrl)).text();
+  // Mã BotGuard của Google (giống FreeTube): chỉ chạy khi tải từ đúng máy chủ Google ở trên.
   new Function(interpreterJs)();
 
   const botguard = await BotGuardClient.create({ program: bg.program, globalName: bg.global_name, globalObject: globalThis });

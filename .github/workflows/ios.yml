@@ -1,5 +1,6 @@
 # Build file IPA chưa ký cho iPhone (cài bằng SideStore / AltStore / Sideloadly — công cụ sẽ tự ký bằng Apple ID).
 # Repo public nên máy macOS của GitHub Actions miễn phí.
+# Quyền tối thiểu: job build chỉ được đọc repo; chỉ job release (chạy sau khi build + kiểm tra bảo mật đều qua) được ghi.
 name: iOS
 
 on:
@@ -9,7 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -19,12 +20,38 @@ env:
   RELEASE_TAG: ios-latest
 
 jobs:
+  security:
+    name: Kiểm tra bảo mật
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Quét bí mật trong toàn bộ lịch sử git (gitleaks)
+        run: |
+          curl -sSfL https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks git --redact --config .gitleaks.toml --exit-code 1 .
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Lỗ hổng thư viện chạy trong app (npm audit)
+        run: npm audit --omit=dev --audit-level=high
+
   build:
+    name: Build IPA
     # Capacitor 8.5 (capacitor-swift-pm) được biên dịch bằng Swift 6.2 → cần Xcode 26.
     runs-on: macos-26
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@v5
         with:
@@ -84,17 +111,24 @@ jobs:
           test -f "$APP/public/index.html"
           test -f "$APP/capacitor.config.json"
           grep -q MeloPlayerPlugin "$APP/capacitor.config.json"
+          grep -q 'Content-Security-Policy' "$APP/public/index.html"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' -c 'Print :CFBundleVersion' -c 'Print :UIBackgroundModes' "$APP/Info.plist"
+          if /usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$APP/Info.plist" 2>/dev/null | grep -q true; then
+            echo "::error::Info.plist cho phép HTTP không mã hoá (NSAllowsArbitraryLoads)"; exit 1
+          fi
           mkdir -p ipa/Payload
           cp -R "$APP" ipa/Payload/
           (cd ipa && zip -qry ../Melo.ipa Payload)
+          shasum -a 256 Melo.ipa | tee Melo.ipa.sha256
           ls -lh Melo.ipa
 
       - name: Lưu IPA (artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: Melo-${{ env.VERSION }}-${{ github.run_number }}
-          path: Melo.ipa
+          name: Melo-ipa
+          path: |
+            Melo.ipa
+            Melo.ipa.sha256
           retention-days: 14
 
       - name: Lưu log khi lỗi
@@ -105,17 +139,34 @@ jobs:
           path: xcodebuild.log
           if-no-files-found: ignore
 
-      - name: Đăng lên GitHub Release (${{ env.RELEASE_TAG }})
+  release:
+    name: Đăng lên GitHub Release
+    needs: [security, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Melo-ipa
+
+      - name: Đăng bản build (${{ env.RELEASE_TAG }})
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: |
+          VERSION=$(date -u +%Y.%m.%d)
           SHORT_SHA=${GITHUB_SHA::7}
+          SHA256=$(cut -d' ' -f1 Melo.ipa.sha256)
           NOTES="Bản build tự động từ nhánh \`${GITHUB_REF_NAME}\`, commit ${SHORT_SHA} (build ${{ github.run_number }}).
 
-          Cài đặt: mở trang này bằng Safari trên iPhone → tải **Melo.ipa** → mở bằng SideStore (hoặc AltStore). Nhạc đã tải vẫn còn sau khi cài bản mới."
+          Cài đặt: mở trang này bằng Safari trên iPhone → tải **Melo.ipa** → mở bằng SideStore (hoặc AltStore). Nhạc đã tải vẫn còn sau khi cài bản mới.
+
+          SHA-256: \`${SHA256}\`"
           gh release delete "$RELEASE_TAG" --cleanup-tag --yes || true
           gh release create "$RELEASE_TAG" Melo.ipa \
             --target "$GITHUB_SHA" \
-            --title "Melo ${VERSION} (build ${{ github.run_number }})" \
+            --title "Melo build ${{ github.run_number }} (${VERSION})" \
             --notes "$NOTES" \
             --latest

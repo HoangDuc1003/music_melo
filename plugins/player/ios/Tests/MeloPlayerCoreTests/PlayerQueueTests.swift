@@ -192,10 +192,24 @@ final class QueueItemTests: XCTestCase {
         XCTAssertNil(PlaybackSource.resolve(item) { _ in false })
         item.url = "capacitor://localhost/x"
         XCTAssertNil(PlaybackSource.resolve(item) { _ in false })
+        item.url = "http://example.com/a.m4a" // không mã hoá → từ chối
+        XCTAssertNil(PlaybackSource.resolve(item) { _ in false })
+        item.url = "https:///no-host"
+        XCTAssertNil(PlaybackSource.resolve(item) { _ in false })
         item.url = "file:///music/a.m4a"
         item.fileUrl = nil
         XCTAssertEqual(PlaybackSource.resolve(item) { $0 == file }, .file(file))
         XCTAssertNil(PlaybackSource.resolve(item) { _ in false })
+    }
+}
+
+final class ArtworkTests: XCTestCase {
+    func testOnlyHttpsOrLocalFiles() {
+        XCTAssertEqual(artworkURL("https://lh3.googleusercontent.com/a=w544"), URL(string: "https://lh3.googleusercontent.com/a=w544"))
+        XCTAssertEqual(artworkURL("file:///music/a.jpg"), URL(fileURLWithPath: "/music/a.jpg"))
+        XCTAssertNil(artworkURL("http://example.com/a.jpg"))
+        XCTAssertNil(artworkURL("javascript:alert(1)"))
+        XCTAssertNil(artworkURL("data:image/png;base64,AAAA"))
     }
 }
 

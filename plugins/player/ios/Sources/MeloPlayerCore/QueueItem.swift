@@ -78,10 +78,17 @@ public enum PlaybackSource: Equatable {
             guard let file = fileURL(item.url), fileExists(file) else { return nil }
             return .file(file)
         }
-        guard let url = URL(string: item.url), let scheme = url.scheme?.lowercased(),
-              scheme == "https" || scheme == "http" else { return nil }
+        // Chỉ nhận HTTPS (link YouTube luôn là https); http và scheme lạ bị từ chối.
+        guard let url = URL(string: item.url), url.scheme?.lowercased() == "https", url.host != nil else { return nil }
         return .remote(url, headers: item.headers)
     }
+}
+
+/// Ảnh bìa cho màn hình khoá: chỉ https hoặc file trên máy.
+public func artworkURL(_ value: String) -> URL? {
+    if let file = fileURL(value) { return file }
+    guard let url = URL(string: value), url.scheme?.lowercased() == "https", url.host != nil else { return nil }
+    return url
 }
 
 /// "file:///…" hoặc "/var/…" → URL file.

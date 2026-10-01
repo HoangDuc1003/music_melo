@@ -1,0 +1,10 @@
+# Cấu hình quét bí mật (gitleaks) cho CI. Dùng bộ luật mặc định, chỉ bỏ qua hằng số CÔNG KHAI:
+# REQUEST_KEY của BotGuard có sẵn trong mã JS công khai của YouTube (không phải bí mật của ta).
+# Không bao giờ thêm client secret / token thật vào đây — bí mật thật để trong GitHub Secrets.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Hằng số công khai của BotGuard/YouTube web"
+regexTarget = "match"
+regexes = ['''O43z0dpjhgX20SCx4KAo''']
