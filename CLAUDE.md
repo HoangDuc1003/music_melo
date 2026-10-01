@@ -124,5 +124,10 @@ TODO (next sessions):
 - `cd plugins/player && swift test` — native queue tests (macOS/Linux; CI runs them on every push).
 - UI smoke test (9 flows incl. download, offline, edge swipe): `npm run dev:mock -- --port 5174`, then
   `npm i --no-save playwright && CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome node scripts/ui-smoke.mjs`.
+- README images (`docs/images/`): `scripts/readme-shots.mjs` (app screenshots from `dev:mock` on :5174, JPEG; slows
+  blob reads only inside the script to show progress bars) and `scripts/install-illustrations.mjs` (HTML → PNG
+  install-step illustrations + install page). Both need playwright (`npm i --no-save playwright`) + `CHROMIUM_PATH`.
+  README follows the user's NitroCine (`HoangDuc1003/Cinema-booking`) layout: centered badges, big buttons, screenshot
+  tables, mermaid diagrams, structure, tech table, author.
 - `node scripts/probe.mjs "<query>"`, `scripts/probe-download.mjs <id>`, `scripts/probe-potoken.mjs <id>`,
   `scripts/probe-fullget.mjs <id>`, `scripts/probe-structures.mjs <home|album|artist|…>`.

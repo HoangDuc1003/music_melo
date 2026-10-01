@@ -10,6 +10,9 @@ import { useNetwork } from '@/lib/network';
 import { toast } from '@/ui/overlays';
 import type { Track } from '@/youtube/types';
 
+/** Bài đang tải lên đầu (thấy ngay thanh tiến độ), rồi bài đang chờ, bài lỗi ở cuối. */
+const PENDING_ORDER: Record<string, number> = { downloading: 0, queued: 1, error: 2 };
+
 /**
  * Bài đã tải (nghe offline) + các bài đang tải / lỗi.
  * Trang luôn được giữ trong cây (ẩn bằng `hidden`): tiến độ và tốc độ đổi liên tục nên chỉ các ô nhỏ bên dưới
@@ -23,7 +26,8 @@ export function DownloadsPage() {
   if (!tracks) return null;
 
   const done = tracks.filter((t) => rows.get(t.id)?.status === 'done');
-  const pending = tracks.filter((t) => rows.get(t.id)?.status !== 'done');
+  const rank = (t: Track) => PENDING_ORDER[rows.get(t.id)?.status ?? 'queued'] ?? 1;
+  const pending = tracks.filter((t) => rows.get(t.id)?.status !== 'done').sort((a, b) => rank(a) - rank(b));
   const used = totalDownloadedBytes(rows.values());
 
   return (

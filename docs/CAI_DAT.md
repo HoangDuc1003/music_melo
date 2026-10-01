@@ -1,5 +1,7 @@
 # Cài Melo lên iPhone
 
+> Hình minh hoạ: các màn hình được vẽ lại với đúng tên mục cần bấm. Chữ trên máy có thể khác chút tuỳ phiên bản iOS.
+
 Có hai cách:
 
 | | Cách 1: SideStore (miễn phí) | Cách 2: Cài 1 chạm (Ad Hoc) |
@@ -42,12 +44,16 @@ LocalDevVPN cần bật mỗi khi SideStore cài, cập nhật hoặc gia hạn 
 
 iloader tự đặt sẵn pairing file nên không phải làm tay.
 
+<img src="images/install/1-may-tinh.png" alt="Bước 1: cài iTunes, iloader, cắm iPhone, Install SideStore" width="100%"/>
+
 ### 3. Kích hoạt trên iPhone
 
 1. **Cài đặt → Cài đặt chung → Quản lý VPN & Thiết bị**, chọn Apple ID ở mục Ứng dụng nhà phát triển, rồi bấm **Tin cậy**.
 2. **Cài đặt → Quyền riêng tư & Bảo mật → Chế độ nhà phát triển**: bật, máy sẽ khởi động lại.
 3. Mở LocalDevVPN, bấm **Connect**. Mở SideStore, đăng nhập **đúng Apple ID** đã dùng ở iloader.
 4. Tab **My Apps**: bấm nút **7 DAYS** cạnh SideStore để gia hạn lần đầu. Nếu được hỏi tạo chứng chỉ mới, chọn **Yes**.
+
+<img src="images/install/2-iphone.png" alt="Tin cậy Apple ID và bật Chế độ nhà phát triển" width="100%"/>
 
 ### 4. Cài Melo (một lần)
 
@@ -58,6 +64,8 @@ iloader tự đặt sẵn pairing file nên không phải làm tay.
 
 Các bản sau chỉ cần bấm **Update** trong SideStore.
 
+<img src="images/install/3-sidestore.png" alt="LocalDevVPN Connect, 7 DAYS, thêm source, GET" width="100%"/>
+
 ### 5. Tự gia hạn, không phải nhớ 7 ngày
 
 SideStore tự gia hạn app khi chạy nền. Để chắc chắn hơn, tạo một tự động hoá trong app **Phím tắt**:
@@ -67,6 +75,8 @@ SideStore tự gia hạn app khi chạy nền. Để chắc chắn hơn, tạo m
 3. Thêm tác vụ **Mở ứng dụng → SideStore**.
 
 Điều kiện: LocalDevVPN đang kết nối và có Wi‑Fi. Nếu quá 7 ngày chưa gia hạn, Melo không mở được. Nhạc đã tải vẫn còn; chỉ cần mở SideStore gia hạn là dùng tiếp.
+
+<img src="images/install/4-tu-gia-han.png" alt="Phím tắt tự mở SideStore lúc 3 giờ sáng" width="100%"/>
 
 ### Giới hạn của Apple ID miễn phí
 
@@ -82,7 +92,9 @@ SideStore tự gia hạn app khi chạy nền. Để chắc chắn hơn, tạo m
 
 ## Cách 2: Cài 1 chạm (Ad Hoc), không cần Mac
 
-Làm một lần trên máy Windows (dùng **Git Bash**, có sẵn `openssl`), khoảng 20 phút.
+Làm một lần trên máy Windows (dùng **Git Bash**, có sẵn `openssl`), khoảng 20 phút. Sau đó mỗi lần cài hoặc cập nhật chỉ cần mở trang cài đặt bằng Safari:
+
+<img src="images/install/trang-cai-dat.jpg" alt="Trang cài đặt Melo" width="260"/>
 
 ### Bước 1: Tài khoản và thiết bị
 
