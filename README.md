@@ -63,7 +63,7 @@
 | <img src="./docs/images/app/thu-vien.jpg" width="250"/> | <img src="./docs/images/app/dang-tai.jpg" width="250"/> | <img src="./docs/images/app/cai-dat.jpg" width="250"/> |
 | *Bài đã thích, đã tải, playlist của bạn.* | *Tải nhiều bài cùng lúc, hiện tốc độ.* | *Tự động hoặc cố định 1–15 bài.* |
 
-<sub>Ảnh chụp ở chế độ dữ liệu mẫu (`npm run dev:mock`), khổ iPhone 390×844.</sub>
+<sub>Ảnh chụp ở chế độ dữ liệu mẫu (`npm run dev:mock`), khổ iPhone 390×844. Ảnh bìa là tranh SVG tự vẽ theo tên bài (`src/youtube/mock/covers.ts`), không phải ảnh bìa thật; khi dùng thật, app hiện ảnh bìa từ YouTube Music.</sub>
 
 ---
 

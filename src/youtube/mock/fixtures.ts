@@ -1,34 +1,6 @@
 // Dữ liệu mẫu cho `npm run dev:mock` (chỉ dùng khi phát triển; không có trong bản build thật).
 import type { AlbumPage, ArtistPage, Card, PlaylistPage, Shelf, Track } from '../types';
-
-const COLORS = [
-  ['#e8115b', '#5f0a2b'],
-  ['#1e3264', '#4f8bff'],
-  ['#8d67ab', '#2b1a3d'],
-  ['#e1118c', '#ff9a3c'],
-  ['#148a08', '#0c3d07'],
-  ['#dc148c', '#3a0a26'],
-  ['#509bf5', '#0b2a54'],
-  ['#e13300', '#521300'],
-  ['#7358ff', '#1b1240'],
-  ['#ba5d07', '#3d1e02']
-];
-
-/** Ảnh bìa SVG có chữ cái đầu, màu theo id. */
-export function cover(seed: string, label: string, round = false): string {
-  let hash = 0;
-  for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) | 0;
-  const [a, b] = COLORS[Math.abs(hash) % COLORS.length];
-  const initials = label
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase();
-  const shape = round ? '<circle cx="150" cy="150" r="150" fill="url(#g)"/>' : '<rect width="300" height="300" fill="url(#g)"/>';
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient></defs>${shape}<text x="150" y="175" font-family="sans-serif" font-size="96" font-weight="700" fill="rgba(255,255,255,0.85)" text-anchor="middle">${initials}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
+import { albumCover, artistCover, playlistCover, trackCover } from './covers';
 
 const ARTISTS = [
   { id: 'UCmock-ha-anh', name: 'Hà Anh' },
@@ -54,15 +26,21 @@ export const TRACKS: Track[] = TITLES.map((title, i) => {
     artists: [artist],
     album: { id: `MPREb_mock${i % 4}`, name: `Album ${['Mùa Hạ', 'Thành Phố', 'Hành Trình', 'Kỷ Niệm'][i % 4]}` },
     duration: 150 + ((i * 37) % 120),
-    thumbnail: cover(id, title)
+    thumbnail: trackCover(id, title)
   };
 });
 
-export const ARTIST_CARDS: Card[] = ARTISTS.map((a) => ({ kind: 'artist', id: a.id, title: a.name, subtitle: 'Nghệ sĩ', thumbnail: cover(a.id, a.name, true) }));
+export const ARTIST_CARDS: Card[] = ARTISTS.map((a, i) => ({
+  kind: 'artist',
+  id: a.id,
+  title: a.name,
+  subtitle: 'Nghệ sĩ',
+  thumbnail: artistCover(a.id, a.name, i, true)
+}));
 
 export const ALBUM_CARDS: Card[] = [0, 1, 2, 3].map((i) => {
   const name = `Album ${['Mùa Hạ', 'Thành Phố', 'Hành Trình', 'Kỷ Niệm'][i]}`;
-  return { kind: 'album', id: `MPREb_mock${i}`, title: name, subtitle: `Album • ${ARTISTS[i].name} • 202${i}`, thumbnail: cover(`album${i}`, name) };
+  return { kind: 'album', id: `MPREb_mock${i}`, title: name, subtitle: `Album • ${ARTISTS[i].name} • 202${i}`, thumbnail: albumCover(`album${i}`, name, ARTISTS[i].name) };
 });
 
 export const PLAYLIST_CARDS: Card[] = ['Nhạc Việt Hot', 'Chill Cuối Tuần', 'Lofi Học Bài', 'Nhạc Đi Tàu'].map((name, i) => ({
@@ -70,7 +48,7 @@ export const PLAYLIST_CARDS: Card[] = ['Nhạc Việt Hot', 'Chill Cuối Tuần
   id: `PLmock${String(i).padStart(10, '0')}`,
   title: name,
   subtitle: 'Playlist • YouTube Music',
-  thumbnail: cover(`pl${i}`, name)
+  thumbnail: playlistCover(`pl${i}`, name)
 }));
 
 export const HOME: Shelf[] = [
@@ -101,7 +79,7 @@ export function artist(id: string): ArtistPage {
     id: a.id,
     name: a.name,
     description: `${a.name} là nghệ sĩ mẫu dùng để chạy thử giao diện Melo. Đây không phải dữ liệu thật từ YouTube Music.`,
-    thumbnail: cover(a.id, a.name),
+    thumbnail: artistCover(a.id, a.name, ARTISTS.indexOf(a)),
     topTracks: TRACKS.filter((t) => t.artists[0].id === a.id).concat(TRACKS.slice(0, 4)),
     shelves: [
       { title: 'Album', items: ALBUM_CARDS.map((card) => ({ type: 'card', card })) },

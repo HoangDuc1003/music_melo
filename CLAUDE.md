@@ -127,6 +127,8 @@ TODO (next sessions):
 - README images (`docs/images/`): `scripts/readme-shots.mjs` (app screenshots from `dev:mock` on :5174, JPEG; slows
   blob reads only inside the script to show progress bars) and `scripts/install-illustrations.mjs` (HTML → PNG
   install-step illustrations + install page). Both need playwright (`npm i --no-save playwright`) + `CHROMIUM_PATH`.
+  Mock artwork = generated SVG scenes keyed by title words (`src/youtube/mock/covers.ts`: rain, city, sea, river +
+  pagoda, train, coffee, vinyl, love, letter…; albums/playlists get text, artists get silhouettes) — never real covers.
   README follows the user's NitroCine (`HoangDuc1003/Cinema-booking`) layout: centered badges, big buttons, screenshot
   tables, mermaid diagrams, structure, tech table, author.
 - `node scripts/probe.mjs "<query>"`, `scripts/probe-download.mjs <id>`, `scripts/probe-potoken.mjs <id>`,
