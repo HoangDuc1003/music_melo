@@ -1,0 +1,121 @@
+# Build file IPA chưa ký cho iPhone (cài bằng SideStore / AltStore / Sideloadly — công cụ sẽ tự ký bằng Apple ID).
+# Repo public nên máy macOS của GitHub Actions miễn phí.
+name: iOS
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    paths-ignore: ['**/*.md', 'docs/**', 'scripts/**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RELEASE_TAG: ios-latest
+
+jobs:
+  build:
+    # Capacitor 8.5 (capacitor-swift-pm) được biên dịch bằng Swift 6.2 → cần Xcode 26.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Xcode
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Cài thư viện
+        run: npm ci
+
+      - name: Test JS (vitest)
+        run: npm test
+
+      - name: Build web
+        run: npm run build
+
+      - name: Đồng bộ Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Test Swift (hàng chờ native)
+        working-directory: plugins/player
+        run: swift test
+
+      - name: Build app iOS (không ký)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          xcodebuild \
+            -project ios/App/App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="${{ github.run_number }}" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build > xcodebuild.log 2>&1 || {
+              echo "::group::Lỗi xcodebuild"
+              grep -E "error:|fatal error|BUILD FAILED" xcodebuild.log | head -60
+              echo "::endgroup::"
+              tail -120 xcodebuild.log
+              exit 1
+            }
+          grep -E "warning: .*(MeloPlayer|plugins/player)" xcodebuild.log | sort -u | head -40 || true
+          tail -3 xcodebuild.log
+
+      - name: Đóng gói IPA
+        run: |
+          APP=build/Build/Products/Release-iphoneos/App.app
+          test -f "$APP/public/index.html"
+          test -f "$APP/capacitor.config.json"
+          grep -q MeloPlayerPlugin "$APP/capacitor.config.json"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' -c 'Print :CFBundleVersion' -c 'Print :UIBackgroundModes' "$APP/Info.plist"
+          mkdir -p ipa/Payload
+          cp -R "$APP" ipa/Payload/
+          (cd ipa && zip -qry ../Melo.ipa Payload)
+          ls -lh Melo.ipa
+
+      - name: Lưu IPA (artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Melo-${{ env.VERSION }}-${{ github.run_number }}
+          path: Melo.ipa
+          retention-days: 14
+
+      - name: Lưu log khi lỗi
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log-${{ github.run_number }}
+          path: xcodebuild.log
+          if-no-files-found: ignore
+
+      - name: Đăng lên GitHub Release (${{ env.RELEASE_TAG }})
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          NOTES="Bản build tự động từ nhánh \`${GITHUB_REF_NAME}\`, commit ${SHORT_SHA} (build ${{ github.run_number }}).
+
+          Cài đặt: mở trang này bằng Safari trên iPhone → tải **Melo.ipa** → mở bằng SideStore (hoặc AltStore). Nhạc đã tải vẫn còn sau khi cài bản mới."
+          gh release delete "$RELEASE_TAG" --cleanup-tag --yes || true
+          gh release create "$RELEASE_TAG" Melo.ipa \
+            --target "$GITHUB_SHA" \
+            --title "Melo ${VERSION} (build ${{ github.run_number }})" \
+            --notes "$NOTES" \
+            --latest

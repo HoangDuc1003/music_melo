@@ -154,9 +154,11 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
     else if (index === this.index) {
       const wasPlaying = !this.audio.paused;
       if (this.index < this.items.length) this.load(this.index, 0, wasPlaying);
+      else if (this.items.length) this.load(this.items.length - 1, 0, false);
       else {
         this.audio.pause();
-        this.index = this.items.length - 1;
+        this.audio.removeAttribute('src');
+        this.index = -1;
       }
     }
     this.emitState();

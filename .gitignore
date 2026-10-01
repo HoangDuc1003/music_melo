@@ -20,3 +20,8 @@ xcuserdata/
 
 # local Claude settings
 .claude/settings.local.json
+
+# SwiftPM (plugin Swift chạy test bằng `swift test`)
+plugins/player/.build/
+plugins/player/.swiftpm/
+plugins/player/Package.resolved
