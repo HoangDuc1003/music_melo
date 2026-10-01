@@ -69,7 +69,7 @@ export function TrackMenu() {
           )}
           <SheetItem icon={<Radio size={22} />} label="Phát radio từ bài này" onClick={() => run(() => playRadio(track))} />
           {target.queueIndex !== undefined && target.queueIndex !== currentIndex && (
-            <SheetItem icon={<ListMinus size={22} />} label="Xoá khỏi hàng chờ" onClick={() => run(() => removeAt(target.queueIndex!))} />
+            <SheetItem icon={<ListMinus size={22} />} label="Xoá khỏi hàng chờ" onClick={() => run(() => removeAt(target.queueIndex!, target.queueUid))} />
           )}
           {target.playlist && (
             <SheetItem

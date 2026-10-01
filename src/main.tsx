@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { installGlobalErrorLogging, log } from '@/lib/log';
 import { initDownloads } from '@/downloads/manager';
+import { pruneHistory } from '@/lib/library';
 import { initPlayer } from '@/player/controller';
 import { preloadYouTube } from '@/youtube/client';
 import App from './App';
@@ -12,7 +13,9 @@ installGlobalErrorLogging();
 void initPlayer()
   .catch((err) => log.error('player', 'khởi động trình phát lỗi:', err))
   .then(() => initDownloads())
-  .catch((err) => log.error('download', 'khởi động phần tải về lỗi:', err));
+  .catch((err) => log.error('download', 'khởi động phần tải về lỗi:', err))
+  .then(() => pruneHistory())
+  .catch((err) => log.warn('library', 'dọn lịch sử lỗi:', err));
 
 const queryClient = new QueryClient({
   defaultOptions: {

@@ -66,7 +66,7 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
   };
   const onHandleUp = () => {
     if (dragFrom !== undefined && dragOver !== undefined && dragFrom !== dragOver) {
-      void move(index + 1 + dragFrom, index + 1 + dragOver);
+      void move(index + 1 + dragFrom, index + 1 + dragOver, upcoming[dragFrom]?.uid);
     }
     setDragFrom(undefined);
     setDragOver(undefined);
@@ -102,7 +102,7 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
               <QueueRow
                 entry={entry}
                 onPlay={() => void skipTo(absolute)}
-                onMenu={() => openTrackMenu({ track: entry.track, queueIndex: absolute })}
+                onMenu={() => openTrackMenu({ track: entry.track, queueIndex: absolute, queueUid: entry.uid })}
                 handle={
                   <button
                     className="touch-none p-2 text-subdued"

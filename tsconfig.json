@@ -10,6 +10,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "isolatedModules": true,
+    "noEmit": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "allowImportingTsExtensions": false,

@@ -151,6 +151,20 @@ export async function clearHistory() {
   await db.history.clear();
 }
 
+/** Lịch sử chỉ giữ chừng này lượt nghe mới nhất, để IndexedDB không phình mãi. */
+export const MAX_HISTORY = 2000;
+
+/** Gọi khi mở app. Trả về số dòng đã xoá. */
+export async function pruneHistory(max = MAX_HISTORY): Promise<number> {
+  return db.transaction('rw', db.history, async () => {
+    const count = await db.history.count();
+    if (count <= max) return 0;
+    const old = await db.history.orderBy('playedAt').limit(count - max).primaryKeys();
+    await db.history.bulkDelete(old);
+    return old.length;
+  });
+}
+
 // ---------- Lịch sử tìm kiếm ----------
 
 const MAX_SEARCHES = 20;

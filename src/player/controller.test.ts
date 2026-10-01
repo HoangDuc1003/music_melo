@@ -347,6 +347,67 @@ describe('sửa hàng chờ', () => {
   });
 });
 
+describe('chạm nhanh liên tiếp', () => {
+  it('hai lần phát liên tiếp: hàng chờ native luôn khớp lần bấm sau cùng', async () => {
+    // Lần đầu chuẩn bị chậm (tra file đã tải lâu), lần sau nhanh.
+    player.setFileUrlProvider(async (id) => {
+      if (id.startsWith('slow')) await new Promise((r) => setTimeout(r, 30));
+      return undefined;
+    });
+    const first = player.playTracks(tracks('slow1', 'slow2'));
+    const second = player.playTracks(tracks('fast1', 'fast2', 'fast3'));
+    await Promise.all([first, second]);
+    await settle();
+    expect(storeIds()).toEqual(['fast1', 'fast2', 'fast3']);
+    expect(native.ids()).toEqual(storeIds());
+  });
+
+  it('Phát tiếp ngay khi đang tạo hàng chờ mới: không lệch', async () => {
+    player.setFileUrlProvider(async (id) => {
+      if (id.startsWith('slow')) await new Promise((r) => setTimeout(r, 30));
+      return undefined;
+    });
+    const a = player.playTracks(tracks('slow1', 'slow2'));
+    const b = player.playNext(tracks('n1'));
+    await Promise.all([a, b]);
+    await settle();
+    expect(native.ids()).toEqual(storeIds());
+    expect(storeIds()).toEqual(['slow1', 'n1', 'slow2']);
+  });
+
+  it('radio về muộn sau khi đã đổi hàng chờ thì không nối vào hàng chờ mới', async () => {
+    let release!: (t: Track[]) => void;
+    youtube.getUpNext.mockImplementationOnce(() => new Promise<Track[]>((r) => (release = r)));
+    await player.playTracks(tracks('a'));
+    await player.playTracks(tracks('x', 'y', 'z', 'w', 'v'));
+    release(tracks('r1', 'r2'));
+    await settle();
+    expect(storeIds()).toEqual(['x', 'y', 'z', 'w', 'v']);
+    expect(native.ids()).toEqual(storeIds());
+  });
+
+  it('xoá / kéo thả theo uid khi vị trí đã cũ', async () => {
+    await player.playTracks(tracks('a', 'b', 'c', 'd', 'e', 'f'));
+    const uidOf = (id: string) => usePlayer.getState().entries.find((e) => e.track.id === id)!.uid;
+    const d = uidOf('d');
+    // Giao diện thấy 'd' ở vị trí 3, nhưng "Phát tiếp" chạy trước làm nó dời sang 4.
+    const inserted = player.playNext(tracks('n1'));
+    const removed = player.removeAt(3, d);
+    await Promise.all([inserted, removed]);
+    expect(storeIds()).toEqual(['a', 'n1', 'b', 'c', 'e', 'f']);
+
+    // Kéo 'f' (vị trí 5) lên vị trí 2, nhưng lệnh xoá 'n1' chạy trước: cả hai đầu dời theo.
+    const removing = player.removeAt(1, uidOf('n1'));
+    const moving = player.move(5, 2, uidOf('f'));
+    await Promise.all([removing, moving]);
+    expect(storeIds()).toEqual(['a', 'f', 'b', 'c', 'e']);
+    expect(native.ids()).toEqual(storeIds());
+
+    await player.removeAt(0, 'không-có');
+    expect(storeIds()).toHaveLength(5);
+  });
+});
+
 describe('lưu và khôi phục', () => {
   it('mở lại app thì nạp hàng chờ cũ ở vị trí cũ, không tự phát', async () => {
     await player.playTracks(tracks('a', 'b', 'c'), 1);

@@ -94,6 +94,11 @@ Sau đó xoá `p12.txt` và `profile.txt`.
 
 **Settings → Pages → Build and deployment → Source: GitHub Actions.**
 
+Khi bật, GitHub tạo môi trường `github-pages` và mặc định chỉ cho nhánh chính (`main`) đăng trang. Nếu đang build từ nhánh khác (ví dụ `claude/...`), làm một trong hai cách:
+
+* gộp code vào `main`; hoặc
+* vào **Settings → Environments → github-pages → Deployment branches and tags**, thêm nhánh đó (hoặc mẫu `claude/*`).
+
 ### Bước 6: Build và cài
 
 1. Vào **Actions → iOS → Run workflow**, hoặc đẩy code mới lên.
@@ -111,6 +116,7 @@ App hiện trên màn hình chính, không cần SideStore và không hết hạ
 | "Không thể cài đặt Melo" | iPhone chưa có trong hồ sơ Ad Hoc → thêm UDID, tạo lại hồ sơ, cập nhật `ADHOC_PROFILE_BASE64`. |
 | Job "Ký Ad Hoc" báo lỗi `.p12` | Sai mật khẩu, hoặc file `.p12` không chứa khoá → làm lại bước 2. |
 | Trang `github.io` báo 404 | Chưa bật Pages (bước 5), hoặc lượt build chưa xong. |
+| Job "Trang cài đặt" báo `Branch ... is not allowed to deploy` | Nhánh chưa được phép đăng trang → xem bước 5. |
 | App mở ra rồi thoát ngay | Chứng chỉ hoặc hồ sơ hết hạn → tạo lại (1 năm một lần). |
 
 Bước ký chạy trong CI bằng `scripts/adhoc-sign.sh`. Các bí mật chỉ nằm trong GitHub Secrets và một keychain tạm bị xoá ngay sau khi ký.

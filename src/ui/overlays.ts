@@ -8,6 +8,8 @@ export interface TrackMenuTarget {
   track: Track;
   /** vị trí trong hàng chờ (khi mở từ danh sách hàng chờ) */
   queueIndex?: number;
+  /** uid của mục trong hàng chờ (tìm lại đúng bài nếu hàng chờ đã đổi) */
+  queueUid?: string;
   /** vị trí trong playlist tự tạo (để hiện "Xoá khỏi playlist") */
   playlist?: { id: number; index: number };
 }

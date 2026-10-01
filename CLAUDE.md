@@ -46,7 +46,11 @@ Done and verified (62 vitest, 15 XCTest, Playwright screenshot runs at 390×844 
   ahead, `needsUrl`, radio when ≤3 left (not when offline/repeat), Spotify-like *Play next* / *Add to queue* (after
   current + earlier queued items), shuffle keeps current, snapshot restore, history, network change → re-resolve,
   offline → only downloaded tracks, `setFileUrlProvider`/`setArtworkFileProvider` hooks. Test uses a fake native that
-  asserts the JS mirror equals the native queue.
+  asserts the JS mirror equals the native queue. **Every queue mutation runs through `exclusive()`** (promise-chain
+  lock): rapid taps can't desync JS ↔ native; insert positions are computed from fresh state after the `toItems` await;
+  `removeAt`/`move` take the entry `uid` to re-find a row whose index went stale; a late radio fetch only appends if
+  the queue's last uid is still the seed. Never `await` a locked public function from inside the lock (deadlock) — use
+  the `*Locked` internals. History is pruned to 2000 rows on launch (`pruneHistory`).
 - **UI** (`src/App.tsx`, `components/`, `pages/`, `ui/`): per-tab nav stacks (`ui/nav.ts`, pages kept mounted with
   `hidden`), iOS edge-swipe back (`EdgeSwipeBack`, 12px strip), slide-in pages, mini player (swipe to skip), full
   player (drag down to close, artwork colour), queue sheet (drag handles), LRCLIB/YouTube lyrics, track menu, playlist
@@ -99,6 +103,10 @@ TODO (next sessions):
 - Chromium (Playwright) treats a horizontal touch swipe as browser history navigation unless `html` has
   `overscroll-behavior: none` (set in `styles.css`); iOS WKWebView in Capacitor has no back gesture.
 - Pages stay mounted with `hidden`: Playwright locators must use `.filter({ visible: true })`.
+- Typecheck with `npx tsc --noEmit` (tsconfig has `noEmit`; a bare `tsc -b` used to drop `.js` files next to the
+  sources, and Vite resolves `.js` before `.ts`).
+- The `github-pages` environment only allows the default branch until the user adds `claude/*` in
+  Settings → Environments (documented in `docs/CAI_DAT.md`).
 - Capacitor CLI registers plugin classes by regex-scanning **every** `.swift` file under `plugins/player/ios` for
   `@objc(Name)` — use that syntax only on `MeloPlayerPlugin` (plain `@objc func` elsewhere).
 - This cloud container cannot reach YouTube/googlevideo/ytimg (egress policy); swift.org is blocked too — run Swift

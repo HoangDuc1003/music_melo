@@ -9,6 +9,7 @@ import {
   isLiked,
   likedTracks,
   playlistWithTracks,
+  pruneHistory,
   recentTracks,
   recordSearch,
   removeFromPlaylist,
@@ -72,6 +73,15 @@ describe('lịch sử', () => {
     ]);
     expect((await recentTracks()).map((t) => t.id)).toEqual(['c', 'a', 'b']);
     expect((await recentTracks(2)).map((t) => t.id)).toEqual(['c', 'a']);
+  });
+
+  it('dọn lịch sử: chỉ giữ các lượt nghe mới nhất', async () => {
+    await db.history.clear();
+    await db.history.bulkAdd(Array.from({ length: 12 }, (_, i) => ({ trackId: `t${i}`, playedAt: 100 - i })));
+    expect(await pruneHistory(5)).toBe(7);
+    const kept = await db.history.orderBy('playedAt').toArray();
+    expect(kept.map((r) => r.playedAt)).toEqual([96, 97, 98, 99, 100]);
+    expect(await pruneHistory(5)).toBe(0);
   });
 
   it('lịch sử tìm kiếm giữ tối đa 20 mục', async () => {
