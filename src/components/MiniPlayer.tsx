@@ -67,7 +67,7 @@ export function MiniPlayer() {
             setDx(0);
           }}
         >
-          <Artwork src={track.thumbnail} className="size-10 shrink-0" />
+          <Artwork src={track.thumbnail} size={40} className="size-10 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[14px] font-semibold leading-tight">{track.title}</div>
             <div className="truncate text-[13px] leading-tight text-white/70">{joinArtists(track.artists)}</div>

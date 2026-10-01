@@ -24,7 +24,7 @@ const TYPES: { type: SearchType; label: string }[] = [
 function CardRow({ card }: { card: Card }) {
   return (
     <button className="flex w-full items-center gap-3 px-4 py-2 text-left active:bg-white/5" onClick={() => openCard(card)}>
-      <Artwork src={card.thumbnail} round={card.kind === 'artist'} className="size-14 shrink-0" />
+      <Artwork src={card.thumbnail} round={card.kind === 'artist'} size={56} className="size-14 shrink-0" />
       <div className="min-w-0">
         <div className="truncate text-[15px]">{card.title}</div>
         <div className="truncate text-[13px] text-subdued">{card.subtitle}</div>

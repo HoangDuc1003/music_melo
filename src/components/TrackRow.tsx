@@ -35,7 +35,7 @@ export const TrackRow = memo(function TrackRow({ track, onPlay, number, showDura
           </span>
         ) : (
           <div className="relative size-12 shrink-0">
-            <Artwork src={track.thumbnail} fallbackSrc={localArt} className="size-12" />
+            <Artwork src={track.thumbnail} fallbackSrc={localArt} size={48} className="size-12" />
             {isCurrent && (
               <div className="absolute inset-0 flex items-center justify-center rounded bg-black/50">
                 <Equalizer playing={playing} />

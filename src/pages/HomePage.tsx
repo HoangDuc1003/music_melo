@@ -49,7 +49,7 @@ export function HomePage() {
               className="flex h-14 items-center gap-2 overflow-hidden rounded bg-white/10 text-left active:bg-white/20"
               onClick={() => void playTracks(recent, i, { context: { type: 'other', title: 'Nghe gần đây' } })}
             >
-              <Artwork src={track.thumbnail} className="size-14 shrink-0 rounded-none" />
+              <Artwork src={track.thumbnail} size={56} className="size-14 shrink-0 rounded-none" />
               <span className="line-clamp-2 pr-2 text-[13px] font-semibold leading-tight">{track.title}</span>
             </button>
           ))}

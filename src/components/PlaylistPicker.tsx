@@ -70,7 +70,7 @@ export function PlaylistPicker() {
             </button>
             {(playlists ?? []).map((p) => (
               <button key={p.id} className="flex w-full items-center gap-3 py-2 text-left active:opacity-70" onClick={() => void add(p.id!, p.name)}>
-                <Artwork src={p.cover} className="size-12" />
+                <Artwork src={p.cover} size={48} className="size-12" />
                 <div className="min-w-0">
                   <div className="truncate text-[15px]">{p.name}</div>
                   <div className="text-[13px] text-subdued">{p.trackIds.length} bài</div>

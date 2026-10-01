@@ -17,7 +17,7 @@ function QueueRow({ entry, onPlay, onMenu, handle }: { entry: QueueEntry; onPlay
   return (
     <div className="flex items-center gap-3 px-4" style={{ height: ROW_HEIGHT }}>
       <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={onPlay}>
-        <Artwork src={entry.track.thumbnail} className="size-11 shrink-0" />
+        <Artwork src={entry.track.thumbnail} size={44} className="size-11 shrink-0" />
         <div className="min-w-0">
           <div className="truncate text-[15px]">{entry.track.title}</div>
           <div className="truncate text-[13px] text-subdued">{joinArtists(entry.track.artists)}</div>
@@ -79,7 +79,7 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
           <>
             <h3 className="px-4 pb-1 text-[16px] font-bold">Đang phát</h3>
             <div className="flex items-center gap-3 px-4" style={{ height: ROW_HEIGHT }}>
-              <Artwork src={current.track.thumbnail} className="size-11 shrink-0" />
+              <Artwork src={current.track.thumbnail} size={44} className="size-11 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[15px] text-accent">{current.track.title}</div>
                 <div className="truncate text-[13px] text-subdued">{joinArtists(current.track.artists)}</div>

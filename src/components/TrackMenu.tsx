@@ -40,7 +40,7 @@ export function TrackMenu() {
       {track && (
         <div className="pb-2">
           <div className="flex items-center gap-3 border-b border-white/10 px-5 pb-4">
-            <Artwork src={track.thumbnail} className="size-12" />
+            <Artwork src={track.thumbnail} size={48} className="size-12" />
             <div className="min-w-0">
               <div className="truncate text-[15px] font-semibold">{track.title}</div>
               <div className="truncate text-[13px] text-subdued">{joinArtists(track.artists)}</div>

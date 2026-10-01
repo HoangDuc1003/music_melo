@@ -21,6 +21,12 @@ body,
   height: 100%;
 }
 
+html {
+  /* Không kéo giãn/điều hướng cả trang khi vuốt (cử chỉ quay lại do app tự xử lý). */
+  overscroll-behavior: none;
+  background: var(--color-base);
+}
+
 body {
   margin: 0;
   background: var(--color-base);
@@ -157,5 +163,16 @@ body {
   *::after {
     animation-duration: 1ms !important;
     transition-duration: 1ms !important;
+  }
+}
+
+/* Trang mới mở trượt vào từ phải như iOS */
+.page-enter {
+  animation: page-in 280ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes page-in {
+  from {
+    transform: translateX(32%);
+    opacity: 0.4;
   }
 }

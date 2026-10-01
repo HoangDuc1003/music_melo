@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Music } from 'lucide-react';
+import { devicePixels, sizedImage } from '@/lib/images';
 
 interface Props {
   src?: string;
@@ -11,12 +12,15 @@ interface Props {
   eager?: boolean;
   /** ảnh dự phòng (ảnh bìa đã tải về máy) khi ảnh trên mạng lỗi */
   fallbackSrc?: string;
+  /** kích thước hiển thị (px CSS) để tải ảnh vừa đủ nét; bỏ trống = ảnh lớn */
+  size?: number;
 }
 
 /** Ảnh bìa có ô giữ chỗ khi chưa có ảnh hoặc ảnh lỗi (offline). */
-export function Artwork({ src: primary, alt = '', className = '', round = false, eager = false, fallbackSrc }: Props) {
+export function Artwork({ src: original, alt = '', className = '', round = false, eager = false, fallbackSrc, size }: Props) {
   const [failed, setFailed] = useState<string[]>([]);
   const shape = round ? 'rounded-full' : 'rounded';
+  const primary = size ? sizedImage(original, devicePixels(size)) : original;
   const src = [primary, fallbackSrc].find((s) => s && !failed.includes(s));
   if (!src) {
     return (

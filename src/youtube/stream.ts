@@ -4,7 +4,6 @@
 import { log } from '@/lib/log';
 import { getPoStreamSession, getStreamSession } from './client';
 import { appFetch } from './http';
-import { getPoTokens } from './potoken';
 import type { ResolvedAudio } from './types';
 
 interface ClientSpec {
@@ -105,6 +104,8 @@ async function tryClient(videoId: string, client: ClientSpec): Promise<ResolvedA
   let poToken: string | undefined;
   let session;
   if (client.needsPoToken) {
+    // BotGuard chỉ cần khi client không cần token bị chặn → nạp khi cần.
+    const { getPoTokens } = await import('./potoken');
     const tokens = await getPoTokens(videoId);
     session = await getPoStreamSession(tokens.visitorData, tokens.sessionToken);
     poToken = tokens.contentToken;

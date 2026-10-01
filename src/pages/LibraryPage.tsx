@@ -115,7 +115,7 @@ export function LibraryPage() {
           route={{ name: 'localPlaylist', id: p.id! }}
           title={p.name}
           subtitle={`Playlist • ${p.trackIds.length} bài`}
-          icon={<Artwork src={p.cover} className="size-14 shrink-0" />}
+          icon={<Artwork src={p.cover} size={56} className="size-14 shrink-0" />}
         />
       ))}
       {playlists && playlists.length === 0 && (
