@@ -1,5 +1,9 @@
 # Plan: App nghe nhạc kiểu Spotify cho iPhone (nhạc YouTube, tải về nghe offline, tắt màn hình vẫn phát, không cần server)
 
+> **Tiến độ (01/10/2026):** GĐ1–GĐ4 và GĐ6 đã xong: plugin Swift, CI build IPA, giao diện, tải về/offline,
+> bảo mật, tối ưu độ mượt. Chưa thử trên iPhone thật. Còn lại: GĐ5 (đăng nhập Gmail + nhập playlist).
+> Chi tiết kỹ thuật và việc tiếp theo: [CLAUDE.md](../CLAUDE.md).
+
 ## 1. Bối cảnh
 
 - Thư mục `music/` đang trống, nên đây là dự án làm mới từ đầu.

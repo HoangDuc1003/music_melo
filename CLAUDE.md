@@ -17,44 +17,53 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
 - `appId` `com.melo.music` must never change (downloads live in the app container).
 - Repo `HoangDuc1003/spoti_music` is **public**: never commit secrets.
 
-## Status (2026-10-01, session 2)
-Done and verified:
-- Vite 8 + React 19 + TS 7 + Tailwind 4 + Capacitor 8.5 (iOS, SPM) project; `ios/` generated, Info.plist has
-  `UIBackgroundModes=audio`, portrait only.
-- `src/youtube/`: `http.ts` (native/dev fetch), `client.ts` (browse/stream/poStream sessions), `normalize.ts`,
-  `music.ts` (home, search, suggestions, album, artist, playlist, up-next radio, lyrics, link parser),
-  `stream.ts` (client fallback + 1MB probe + cache), `potoken.ts` (BotGuard via bgutils-js), `types.ts`.
+## Status (2026-10-01, session 2 — 5 closed loops done, CI green each round)
+Done and verified (62 vitest, 15 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
 - **Swift plugin** `plugins/player/` (package `CapacitorMeloPlayer`):
-  - `ios/Sources/MeloPlayerCore/` — pure Swift (Foundation only): `PlayerQueue`, `QueueItem`/`PlaybackSource`,
-    `RetryPolicy` (needsUrl once → error+skip; stop after skipping the whole queue), `SleepTimer`, `PlayerSnapshot`.
-    XCTest in `ios/Tests/MeloPlayerCoreTests/` (runs on Linux/macOS with `swift test`).
-  - `ios/Sources/MeloPlayerPlugin/` (`#if os(iOS)`): `MeloAudioEngine` (AVPlayer, native queue, AVAudioSession
-    `.playback`, Now Playing + remote commands, interruptions, route change, sleep timer, file-first source) and
-    `MeloPlayerPlugin` (Capacitor bridge, every method hops to main). Capacitor dependency is `.when(platforms: [.iOS])`.
-  - `src/web.ts` mirrors the same semantics with HTML5 audio for PC dev.
-- **CI** `.github/workflows/ios.yml` on `macos-26` (Xcode 26 needed: capacitor-swift-pm 8.5 binaries are Swift 6.2):
-  npm ci → vitest → build → cap sync → `swift test` → unsigned `xcodebuild` → `Melo.ipa` → rolling GitHub Release
-  tag `ios-latest` (+ artifact). First run green (IPA 1.4 MB). Public repo ⇒ macOS minutes are free.
-- **Player controller** `src/player/`: `queue.ts` (pure helpers: shuffle, insert positions, upcoming window, radio
-  dedupe, snapshot), `store.ts` (Zustand `usePlayer`), `controller.ts` (pre-resolve 20 ahead — 3 urgent then 1.5 s
-  apart, `needsUrl` handling with stop-on-all-failing, radio when ≤3 left, Spotify-like Play next / Add to queue
-  before radio entries, shuffle keeps current + restores original order, snapshot in localStorage + restore on launch,
-  history, network change → re-resolve, `setFileUrlProvider` hook for downloads). `initPlayer()` runs in `main.tsx`.
-  Vitest with a fake native that asserts the JS mirror always equals the native queue.
-- `src/App.tsx` is still a TEMPORARY test screen (search + play through the controller). Replace with the real UI.
-- `scripts/probe*.mjs`: diagnostics to re-check which YouTube clients work (run with `node`).
+  - `ios/Sources/MeloPlayerCore/` — pure Swift: `PlayerQueue`, `QueueItem`/`PlaybackSource` (file first, remote
+    **https only**), `artworkURL` (https/file only), `RetryPolicy` (needsUrl once → error+skip; stop after skipping the
+    whole queue), `SleepTimer`, `PlayerSnapshot`. XCTest in `ios/Tests/MeloPlayerCoreTests/`.
+  - `ios/Sources/MeloPlayerPlugin/` (`#if os(iOS)`): `MeloAudioEngine` (AVPlayer, native queue, `.playback` session,
+    Now Playing + remote commands, interruptions, route change, sleep timer) + `MeloPlayerPlugin` bridge (hops to main).
+  - `src/web.ts` mirrors the semantics with HTML5 audio.
+- **CI** `.github/workflows/ios.yml`: jobs `security` (gitleaks over full git history with `.gitleaks.toml`, `npm audit
+  --omit=dev --audit-level=high`), `build` (macos-26, read-only: vitest → build → cap sync → swift test → unsigned
+  xcodebuild → checks CSP + no NSAllowsArbitraryLoads → `Melo.ipa` + sha256 artifact), `release` (only job with
+  `contents: write`; rolling release tag `ios-latest`). Public repo ⇒ free macOS minutes.
+- **Player controller** `src/player/` (`queue.ts` pure helpers, `store.ts` Zustand, `controller.ts`): pre-resolve 20
+  ahead, `needsUrl`, radio when ≤3 left (not when offline/repeat), Spotify-like *Play next* / *Add to queue* (after
+  current + earlier queued items), shuffle keeps current, snapshot restore, history, network change → re-resolve,
+  offline → only downloaded tracks, `setFileUrlProvider`/`setArtworkFileProvider` hooks. Test uses a fake native that
+  asserts the JS mirror equals the native queue.
+- **UI** (`src/App.tsx`, `components/`, `pages/`, `ui/`): per-tab nav stacks (`ui/nav.ts`, pages kept mounted with
+  `hidden`), iOS edge-swipe back (`EdgeSwipeBack`, 12px strip), slide-in pages, mini player (swipe to skip), full
+  player (drag down to close, artwork colour), queue sheet (drag handles), LRCLIB/YouTube lyrics, track menu, playlist
+  picker, sleep timer, toasts, offline banner. Pages: Home, Search (suggestions, history, paste YouTube link), Library,
+  Album, Artist, Playlist, Local playlist, Liked, History, Downloads, Settings, Logs.
+- **Library/lyrics**: `src/lib/library.ts` (likes, local playlists, history, search history), `src/lib/lyrics.ts`
+  (LRCLIB `/get` → `/search` → YouTube, cached in `db.lyrics`; network failures are not cached as misses).
+- **Downloads** `src/downloads/`: `storage.ts` (iPhone: `Library/NoCloud/music/<id>.m4a|.jpg|.json`, download to
+  `.part` then rename, size check, `SAFE_ID` check before any path; web: Blobs in `db.blobs`), `manager.ts` (max 2
+  concurrent, retry with fresh URL, resume on launch / when back online, rebuild from `.json` sidecars, auto-download
+  liked, live index in `useDownloads`).
+- **Security**: build-only CSP (`vite.config.ts`, `'unsafe-eval'` needed by youtubei.js + BotGuard), dev proxy SSRF fix
+  + localhost-only unless `MELO_LAN=1`, BotGuard interpreter URL must be `https://(www.)google.com/js/…`
+  (`trustedInterpreterUrl`), log redaction (`redact()` in `lib/log.ts`: googlevideo URLs, tokens, secrets, IPs),
+  YouTube link parser validates ids (`youtube/links.ts`).
+- **Smoothness**: youtubei.js + BotGuard lazy-loaded (initial JS 482 KB / 150 KB gzip), right-sized artwork
+  (`lib/images.ts`), `content-visibility` rows, rAF position (~15 fps) only while visible.
+- `npm run dev:mock` (aliases `@/youtube/{music,stream,http}` → `src/youtube/mock/`) for UI work without YouTube.
 
-TODO, in this order (details in docs/PLAN.md §4):
-1. Real Spotify-like UI (per-tab navigation stacks, pages, mini/full player, queue sheet, lyrics view).
-2. Downloads: `@capacitor/file-transfer` into `Directory.LibraryNoCloud/music/<id>.m4a` + `.jpg` + `.json`
-   sidecar; max 2 concurrent; `dexie-react-hooks` for live UI; web dev fallback stores Blobs in `db.blobs`.
-   Register `setFileUrlProvider` and call `refreshLocalFile(id)` after a download/delete.
-   **Never persist absolute `file://` paths**: the app container UUID changes on every reinstall/update;
-   store relative paths and build the URI at runtime (`Filesystem.getUri`).
-3. Security pass (CSP, id validation before using ids in file paths, no tokens in logs, secret scan, audit).
-4. Smoothness pass (lazy-load youtubei.js, smaller initial chunk, long lists), then review everything.
-5. Device-flow login + Data API import, paste-a-link import, LRCLIB synced lyrics.
-6. Vietnamese README for the user: SideStore install/refresh, updating, Google Cloud setup.
+NOT verified on a real iPhone yet (no device here): background playback across tracks, lock screen, FileTransfer
+downloads, AVPlayer with googlevideo headers. First thing to do when the user reports back: read their in-app log.
+
+TODO (next sessions):
+1. User test on iPhone with the checklist in docs/PLAN.md §5; fix from the in-app log.
+2. Device-flow login + YouTube Data API import (playlists, likes); store tokens in the **Keychain** (not
+   Preferences/localStorage), never log them (`redact` already masks `access_token`/`refresh_token`).
+   OAuth client id/secret from GitHub Secrets at build time (`.env` is git-ignored).
+3. SideStore/AltStore source JSON for in-app updates (repo is public, so it is possible).
+4. Optional: swipe between tabs, haptics, Keyboard plugin (`@capacitor/keyboard`) if the search keyboard misbehaves.
 
 ## Verified YouTube facts (from this PC's VN residential IP, 2026-10-01 — re-run `scripts/probe*.mjs` if broken)
 - Full-file download works **without PO token only with `VISIONOS`**. `IOS`, `ANDROID_VR`, `MWEB`, `YTMUSIC`,
@@ -73,6 +82,9 @@ TODO, in this order (details in docs/PLAN.md §4):
 - Capacitor web plugins remove listeners by function reference: register a fresh closure per `addListener`
   (StrictMode double effects otherwise remove the live listener).
 - `npm audit` warnings come from `@capacitor/cli` dev deps (uuid in `xcode`) — not shipped in the app.
+- Chromium (Playwright) treats a horizontal touch swipe as browser history navigation unless `html` has
+  `overscroll-behavior: none` (set in `styles.css`); iOS WKWebView in Capacitor has no back gesture.
+- Pages stay mounted with `hidden`: Playwright locators must use `.filter({ visible: true })`.
 - Capacitor CLI registers plugin classes by regex-scanning **every** `.swift` file under `plugins/player/ios` for
   `@objc(Name)` — use that syntax only on `MeloPlayerPlugin` (plain `@objc func` elsewhere).
 - This cloud container cannot reach YouTube/googlevideo/ytimg (egress policy); swift.org is blocked too — run Swift
@@ -80,9 +92,12 @@ TODO, in this order (details in docs/PLAN.md §4):
   (Docker Hub is rate-limited; use the `mirror.gcr.io` mirror). Check CI with the GitHub MCP actions tools.
 
 ## Commands
-- `npm run dev` — Vite on :5173 with the YouTube dev proxy (`/__proxy/<host>/…`, see `vite.config.ts`).
+- `npm run dev` — Vite on :5173 with the YouTube dev proxy (`/__proxy/<host>/…`, see `vite.config.ts`);
+  `MELO_LAN=1 npm run dev` to expose it on the LAN. `npm run dev:mock` — sample data, no YouTube needed.
 - `npm run build` — typecheck + build. `npm test` — vitest (jsdom + fake-indexeddb).
 - `npx cap sync ios` — copy web build + update iOS SPM package list after adding plugins.
 - `cd plugins/player && swift test` — native queue tests (macOS/Linux; CI runs them on every push).
+- UI smoke test (9 flows incl. download, offline, edge swipe): `npm run dev:mock -- --port 5174`, then
+  `npm i --no-save playwright && CHROMIUM_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome node scripts/ui-smoke.mjs`.
 - `node scripts/probe.mjs "<query>"`, `scripts/probe-download.mjs <id>`, `scripts/probe-potoken.mjs <id>`,
   `scripts/probe-fullget.mjs <id>`, `scripts/probe-structures.mjs <home|album|artist|…>`.

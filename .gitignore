@@ -25,3 +25,6 @@ xcuserdata/
 plugins/player/.build/
 plugins/player/.swiftpm/
 plugins/player/Package.resolved
+
+# Ảnh của scripts/ui-smoke.mjs
+ui-smoke-shots/
