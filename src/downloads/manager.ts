@@ -259,7 +259,7 @@ export function __resetDownloadsForTests() {
 }
 
 export async function waitForIdleForTests() {
-  for (let i = 0; i < 200 && (active.size > 0 || (await db.downloads.where('status').equals('queued').count()) > 0); i++) {
+  for (let i = 0; i < 1000 && (active.size > 0 || (await db.downloads.where('status').equals('queued').count()) > 0); i++) {
     await new Promise((resolve) => setTimeout(resolve, 5));
   }
 }

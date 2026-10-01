@@ -90,6 +90,14 @@ class FakeStorage implements DownloadStorage {
 
 let storage: FakeStorage;
 
+async function waitUntil(condition: () => boolean, timeoutMs = 3000) {
+  const started = Date.now();
+  while (!condition()) {
+    if (Date.now() - started > timeoutMs) throw new Error('hết thời gian chờ');
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()));
   __resetDownloadsForTests();
@@ -116,7 +124,15 @@ describe('withRange', () => {
 describe('hàng đợi tải', () => {
   it('tải tối đa 2 bài cùng lúc, lưu file + ảnh + .json + lời, báo trình phát dùng file', async () => {
     const tracks = [1, 2, 3, 4, 5].map(track);
+    // Giữ các lượt tải lại để kiểm tra giới hạn không phụ thuộc tốc độ máy.
+    let release!: () => void;
+    storage.gate = new Promise((r) => (release = r));
     expect(await enqueueDownloads(tracks)).toBe(5);
+    await waitUntil(() => storage.running === MAX_CONCURRENT);
+    await new Promise((r) => setTimeout(r, 30)); // nếu có lỗi, bài thứ 3 sẽ bắt đầu trong lúc này
+    expect(storage.running).toBe(MAX_CONCURRENT);
+    expect(storage.requests).toHaveLength(MAX_CONCURRENT);
+    release();
     await waitForIdleForTests();
 
     expect(storage.maxRunning).toBe(MAX_CONCURRENT);
