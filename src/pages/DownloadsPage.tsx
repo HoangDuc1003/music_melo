@@ -14,6 +14,10 @@ export function DownloadsPage() {
   const rows = useDownloads((s) => s.rows);
   const progress = useDownloads((s) => s.progress);
   const online = useNetwork((s) => s.online);
+  const limit = useDownloads((s) => s.limit);
+  const speed = useDownloads((s) => s.speed);
+  const cooldown = useDownloads((s) => s.cooldown);
+  const waitingForWifi = useDownloads((s) => s.waitingForWifi);
   const ids = [...rows.values()].sort((a, b) => (b.completedAt ?? b.createdAt) - (a.completedAt ?? a.createdAt)).map((r) => r.id);
   const tracks = useLiveQuery(async () => (await db.tracks.bulkGet(ids)).filter((t): t is Track => Boolean(t)), [ids.join(',')]);
   if (!tracks) return null;
@@ -51,7 +55,16 @@ export function DownloadsPage() {
     >
       {pending.length > 0 && (
         <section className="pb-4">
-          <h2 className="px-4 pt-2 pb-1 text-[17px] font-bold">Đang tải ({pending.length})</h2>
+          <h2 className="px-4 pt-2 text-[17px] font-bold">Đang tải ({pending.length})</h2>
+          <p className="px-4 pb-1 text-[12px] text-subdued" aria-live="polite">
+            {!online
+              ? 'Chờ có mạng'
+              : waitingForWifi
+                ? 'Chờ Wi‑Fi (đã tắt tải bằng dữ liệu di động)'
+                : cooldown > 0
+                  ? `YouTube đang hạn chế, tạm nghỉ ${Math.ceil(cooldown / 1000)} giây rồi tải tiếp`
+                  : `${Math.min(limit, pending.filter((t) => rows.get(t.id)?.status === 'downloading').length)}/${limit} lượt song song • ${formatBytes(speed)}/s`}
+          </p>
           {pending.map((track) => {
             const row = rows.get(track.id)!;
             const p = progress.get(track.id);
@@ -64,9 +77,11 @@ export function DownloadsPage() {
                     {row.status === 'error'
                       ? `Lỗi: ${row.error ?? 'không rõ'}`
                       : row.status === 'queued'
-                        ? online
+                        ? online && !waitingForWifi
                           ? 'Đang chờ…'
-                          : 'Chờ có mạng'
+                          : waitingForWifi
+                            ? 'Chờ Wi‑Fi'
+                            : 'Chờ có mạng'
                         : `${Math.round(ratio * 100)}% • ${formatBytes(p?.bytes ?? 0)}`}
                     {' • '}
                     {joinArtists(track.artists)}

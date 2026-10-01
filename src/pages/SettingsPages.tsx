@@ -1,5 +1,14 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { getAutoDownloadLiked, removeAllDownloads, setAutoDownloadLiked, totalDownloadedBytes, useDownloads } from '@/downloads/manager';
+import {
+  CELLULAR_MAX,
+  getAutoDownloadLiked,
+  removeAllDownloads,
+  setAutoDownloadLiked,
+  setDownloadSettings,
+  totalDownloadedBytes,
+  useDownloads,
+  type ConcurrencySetting
+} from '@/downloads/manager';
 import { formatBytes } from '@/lib/format';
 import { ChevronRight, Copy, Trash2 } from 'lucide-react';
 import { Centered, Page } from '@/components/Page';
@@ -51,6 +60,7 @@ export function SettingsPage() {
   const rows = useDownloads((s) => s.rows);
   const doneCount = [...rows.values()].filter((r) => r.status === 'done').length;
   const [autoLiked, setAutoLiked] = useAutoDownloadLiked();
+  const downloadSettings = useDownloads((s) => s.settings);
   return (
     <Page title="Cài đặt" solidHeader>
       <h1 className="px-4 pt-2 text-[24px] font-bold">Cài đặt</h1>
@@ -66,6 +76,45 @@ export function SettingsPage() {
 
       <Section title="Tải về">
         <Item label="Đã tải" detail={`${doneCount} bài • ${formatBytes(totalDownloadedBytes(rows.values()))}`} onClick={() => navigate({ name: 'downloads' })} />
+        <Item
+          label="Số bài tải cùng lúc"
+          detail={
+            downloadSettings.concurrency === 'auto'
+              ? `Tự động 1–15 theo tốc độ mạng (4G/5G tối đa ${CELLULAR_MAX})`
+              : `Luôn ${downloadSettings.concurrency} bài (YouTube chặn thì tự giảm)`
+          }
+          right={
+            <select
+              className="rounded-md bg-white/10 px-2 py-1.5 text-[14px] outline-none"
+              aria-label="Số bài tải cùng lúc"
+              value={String(downloadSettings.concurrency)}
+              onChange={(e) => {
+                const value: ConcurrencySetting = e.target.value === 'auto' ? 'auto' : Number(e.target.value);
+                void setDownloadSettings({ concurrency: value });
+              }}
+            >
+              <option value="auto">Tự động</option>
+              {[1, 2, 3, 5, 8, 10, 12, 15].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          }
+        />
+        <Item
+          label="Tải bằng dữ liệu di động"
+          detail="Tắt thì chỉ tải khi có Wi‑Fi"
+          right={
+            <input
+              type="checkbox"
+              className="toggle"
+              checked={downloadSettings.cellular}
+              onChange={(e) => void setDownloadSettings({ cellular: e.target.checked })}
+              aria-label="Tải bằng dữ liệu di động"
+            />
+          }
+        />
         <Item
           label="Tự tải bài hát đã thích"
           detail="Bấm ♡ là bài được tải về để nghe offline"

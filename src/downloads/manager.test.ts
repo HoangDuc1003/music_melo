@@ -22,13 +22,16 @@ import {
   __resetDownloadsForTests,
   enqueueDownloads,
   initDownloads,
+  activeCountForTests,
   localFileUrl,
-  MAX_CONCURRENT,
+  pump,
   removeDownload,
   retryDownload,
+  setDownloadSettings,
   useDownloads,
   waitForIdleForTests
 } from './manager';
+import { AdaptiveLimiter } from './concurrency';
 import { setStorageForTests, withRange, type DownloadRequest, type DownloadStorage, type SidecarInfo } from './storage';
 
 const track = (n: number): Track => ({ id: `vid${String(n).padStart(8, '0')}`, title: `Bài ${n}`, artists: [{ name: 'A' }], duration: 200, thumbnail: `https://img/${n}` });
@@ -42,6 +45,7 @@ class FakeStorage implements DownloadStorage {
   maxRunning = 0;
   failTimes = new Map<string, number>();
   gate?: Promise<void>;
+  delayMs = 2;
   requests: DownloadRequest[] = [];
 
   async saveAudio(request: DownloadRequest) {
@@ -50,7 +54,8 @@ class FakeStorage implements DownloadStorage {
     this.maxRunning = Math.max(this.maxRunning, this.running);
     try {
       request.onProgress({ bytes: 500, total: 1000 });
-      await (this.gate ?? new Promise((r) => setTimeout(r, 2)));
+      await (this.gate ?? new Promise((r) => setTimeout(r, this.delayMs)));
+      request.onProgress({ bytes: 1000, total: 1000 });
       const fails = this.failTimes.get(request.id) ?? 0;
       if (fails > 0) {
         this.failTimes.set(request.id, fails - 1);
@@ -100,7 +105,8 @@ async function waitUntil(condition: () => boolean, timeoutMs = 3000) {
 
 beforeEach(async () => {
   await Promise.all(db.tables.map((t) => t.clear()));
-  __resetDownloadsForTests();
+  // Mặc định trong test: cố định 2 lượt, thời gian nghỉ ngắn để test chạy nhanh.
+  __resetDownloadsForTests({ limiter: new AdaptiveLimiter({ initial: 2, max: 2, baseCooldownMs: 20 }) });
   storage = new FakeStorage();
   setStorageForTests(storage);
   setNetworkStatus(true, 'wifi');
@@ -122,7 +128,8 @@ describe('withRange', () => {
 });
 
 describe('hàng đợi tải', () => {
-  it('tải tối đa 2 bài cùng lúc, lưu file + ảnh + .json + lời, báo trình phát dùng file', async () => {
+  it('không vượt số lượt cho phép, lưu file + ảnh + .json + lời, báo trình phát dùng file', async () => {
+    const MAX_CONCURRENT = 2;
     const tracks = [1, 2, 3, 4, 5].map(track);
     // Giữ các lượt tải lại để kiểm tra giới hạn không phụ thuộc tốc độ máy.
     let release!: () => void;
@@ -186,12 +193,11 @@ describe('hàng đợi tải', () => {
     let release!: () => void;
     storage.gate = new Promise((r) => (release = r));
     await enqueueDownloads([track(1)]);
-    await new Promise((r) => setTimeout(r, 5));
+    await waitUntil(() => storage.running === 1);
     expect(useDownloads.getState().progress.get(track(1).id)).toEqual({ bytes: 500, total: 1000 });
     await removeDownload(track(1).id);
     release();
-    await waitForIdleForTests();
-    await new Promise((r) => setTimeout(r, 5));
+    await waitUntil(() => activeCountForTests() === 0);
     expect(await db.downloads.get(track(1).id)).toBeUndefined();
     expect(storage.files.has(track(1).id)).toBe(false);
   });
@@ -205,6 +211,76 @@ describe('hàng đợi tải', () => {
     setNetworkStatus(true, 'wifi');
     await waitForIdleForTests();
     expect((await db.downloads.get(track(1).id))?.status).toBe('done');
+  });
+});
+
+describe('tải song song tự điều chỉnh', () => {
+  it('chạy đúng số lượt cố định người dùng chọn (ví dụ 5)', async () => {
+    __resetDownloadsForTests({ limiter: new AdaptiveLimiter({ initial: 3, max: 15, baseCooldownMs: 20 }) });
+    let release!: () => void;
+    storage.gate = new Promise((r) => (release = r));
+    await setDownloadSettings({ concurrency: 5 });
+    await enqueueDownloads(Array.from({ length: 12 }, (_, i) => track(i + 1)));
+    await waitUntil(() => storage.running === 5);
+    await new Promise((r) => setTimeout(r, 30));
+    expect(storage.running).toBe(5);
+    expect(useDownloads.getState().limit).toBe(5);
+    release();
+    await waitForIdleForTests();
+    expect(storage.maxRunning).toBe(5);
+    expect(await db.downloads.where('status').equals('done').count()).toBe(12);
+  });
+
+  it('tự động: tăng dần số lượt khi tải trơn tru, không quá 15', async () => {
+    __resetDownloadsForTests({ limiter: new AdaptiveLimiter({ initial: 3, max: 15, baseCooldownMs: 20 }) });
+    storage.delayMs = 15;
+    await enqueueDownloads(Array.from({ length: 40 }, (_, i) => track(i + 1)));
+    await waitForIdleForTests();
+    expect(storage.maxRunning).toBeGreaterThan(3);
+    expect(storage.maxRunning).toBeLessThanOrEqual(15);
+    expect(await db.downloads.where('status').equals('done').count()).toBe(40);
+  });
+
+  it('bị chặn (403) thì giảm một nửa và tạm nghỉ, hết nghỉ thì tải tiếp', async () => {
+    let t = 0;
+    const limiter = new AdaptiveLimiter({ initial: 8, max: 8, baseCooldownMs: 60_000, now: () => t });
+    __resetDownloadsForTests({ limiter });
+    storage.failTimes.set(track(1).id, 2);
+    await enqueueDownloads([track(1)]);
+    await waitUntil(() => limiter.limit === 4);
+    expect(limiter.cooldownRemaining()).toBe(60_000);
+    // Đang nghỉ: bài mới thêm không được bắt đầu, bài lỗi cũng chưa thử lại.
+    await enqueueDownloads([track(2), track(3)]);
+    await new Promise((r) => setTimeout(r, 40));
+    expect(storage.requests.map((r) => r.id)).toEqual([track(1).id]);
+    expect(useDownloads.getState().cooldown).toBeGreaterThan(0);
+    // Hết nghỉ → thử lại bài 1, lại bị chặn → còn 2 lượt, nghỉ lâu hơn.
+    t += 60_000;
+    await waitUntil(() => limiter.limit === 2);
+    expect(limiter.cooldownRemaining()).toBe(120_000);
+    // Hết nghỉ lần hai → các bài còn lại tải tiếp.
+    t += 120_000;
+    await pump();
+    await waitForIdleForTests();
+    expect((await db.downloads.get(track(1).id))?.status).toBe('error');
+    expect((await db.downloads.get(track(2).id))?.status).toBe('done');
+    expect((await db.downloads.get(track(3).id))?.status).toBe('done');
+  });
+
+  it('không cho tải bằng 4G/5G thì chờ Wi‑Fi; tự động trên 4G tối đa 6 lượt', async () => {
+    __resetDownloadsForTests({ limiter: new AdaptiveLimiter({ initial: 3, max: 15, baseCooldownMs: 20 }) });
+    await initDownloads();
+    setNetworkStatus(true, 'cellular');
+    expect(useDownloads.getState().limit).toBeLessThanOrEqual(6);
+    await setDownloadSettings({ cellular: false });
+    await enqueueDownloads([track(1)]);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(storage.requests).toHaveLength(0);
+    expect(useDownloads.getState().waitingForWifi).toBe(true);
+    setNetworkStatus(true, 'wifi');
+    await waitForIdleForTests();
+    expect((await db.downloads.get(track(1).id))?.status).toBe('done');
+    expect(activeCountForTests()).toBe(0);
   });
 });
 
@@ -222,8 +298,7 @@ describe('khởi động', () => {
     expect((await db.downloads.get(track(1).id))?.status).toBe('done');
     expect(await db.downloads.get(track(7).id)).toMatchObject({ status: 'done', bytes: 1234 });
     expect(await db.tracks.get(track(7).id)).toMatchObject({ title: 'Bài 7' });
-    await new Promise((r) => setTimeout(r, 20));
-    expect(useDownloads.getState().rows.get(track(7).id)?.status).toBe('done');
+    await waitUntil(() => useDownloads.getState().rows.get(track(7).id)?.status === 'done');
   });
 
   it('thích bài thì tự tải nếu bật', async () => {
@@ -232,8 +307,11 @@ describe('khởi động', () => {
     await initDownloads();
     await setAutoDownloadLiked(true);
     await toggleLike(track(3));
-    await new Promise((r) => setTimeout(r, 20));
-    await waitForIdleForTests();
-    expect((await db.downloads.get(track(3).id))?.status).toBe('done');
+    let status: string | undefined;
+    await waitUntil(() => {
+      void db.downloads.get(track(3).id).then((row) => (status = row?.status));
+      return status === 'done';
+    });
+    expect(status).toBe('done');
   });
 });

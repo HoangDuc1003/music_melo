@@ -43,9 +43,12 @@ Done and verified (62 vitest, 15 XCTest, Playwright screenshot runs at 390×844 
 - **Library/lyrics**: `src/lib/library.ts` (likes, local playlists, history, search history), `src/lib/lyrics.ts`
   (LRCLIB `/get` → `/search` → YouTube, cached in `db.lyrics`; network failures are not cached as misses).
 - **Downloads** `src/downloads/`: `storage.ts` (iPhone: `Library/NoCloud/music/<id>.m4a|.jpg|.json`, download to
-  `.part` then rename, size check, `SAFE_ID` check before any path; web: Blobs in `db.blobs`), `manager.ts` (max 2
-  concurrent, retry with fresh URL, resume on launch / when back online, rebuild from `.json` sidecars, auto-download
-  liked, live index in `useDownloads`).
+  `.part` then rename, size check, `SAFE_ID` check before any path; web: Blobs in `db.blobs`), `manager.ts` (retry
+  with fresh URL, resume on launch / when back online, rebuild from `.json` sidecars, auto-download liked, live index
+  in `useDownloads`), `concurrency.ts` (**adaptive parallel downloads, AIMD 1–15**: +1 per success while total
+  throughput still grows, −1 when it drops (bandwidth peak), ÷2 + exponential cooldown on 403/429; 4G/5G capped at 6;
+  setting Tự động / fixed 1–15 + "tải bằng dữ liệu di động"; `Semaphore(3)` around `resolveAudio`; 150 ms start gap).
+  FileTransfer iOS creates one URLSession per download, so no 6-connections-per-host cap.
 - **Security**: build-only CSP (`vite.config.ts`, `'unsafe-eval'` needed by youtubei.js + BotGuard), dev proxy SSRF fix
   + localhost-only unless `MELO_LAN=1`, BotGuard interpreter URL must be `https://(www.)google.com/js/…`
   (`trustedInterpreterUrl`), log redaction (`redact()` in `lib/log.ts`: googlevideo URLs, tokens, secrets, IPs),
