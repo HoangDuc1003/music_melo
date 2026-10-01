@@ -1,12 +1,17 @@
-# Build file IPA chưa ký cho iPhone (cài bằng SideStore / AltStore / Sideloadly — công cụ sẽ tự ký bằng Apple ID).
+# Build Melo cho iPhone.
+# - Luôn có: Melo.ipa chưa ký (cài bằng SideStore / AltStore / Sideloadly — công cụ tự ký bằng Apple ID miễn phí)
+#   + source.json để SideStore cập nhật app bằng 1 chạm.
+# - Nếu có secrets ký (tài khoản Apple Developer 99 USD/năm, xem docs/CAI_DAT.md): thêm Melo-adhoc.ipa + manifest.plist
+#   để cài 1 chạm từ Safari, không cần app thứ ba.
+# - Nếu đã bật GitHub Pages (Settings → Pages → Source: GitHub Actions): trang cài đặt tại https://<owner>.github.io/<repo>/
+# Quyền tối thiểu: build chỉ đọc; chỉ job release được ghi Release; chỉ job pages được đăng Pages.
 # Repo public nên máy macOS của GitHub Actions miễn phí.
-# Quyền tối thiểu: job build chỉ được đọc repo; chỉ job release (chạy sau khi build + kiểm tra bảo mật đều qua) được ghi.
 name: iOS
 
 on:
   push:
     branches: [main, 'claude/**']
-    paths-ignore: ['**/*.md', 'docs/**', 'scripts/**']
+    paths-ignore: ['**/*.md', 'docs/**']
   workflow_dispatch:
 
 permissions:
@@ -43,11 +48,33 @@ jobs:
       - name: Lỗ hổng thư viện chạy trong app (npm audit)
         run: npm audit --omit=dev --audit-level=high
 
+  signing:
+    name: Kiểm tra cấu hình ký Ad Hoc
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      adhoc: ${{ steps.check.outputs.adhoc }}
+    steps:
+      - id: check
+        env:
+          P12: ${{ secrets.SIGNING_CERT_P12_BASE64 }}
+          PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+          PROFILE: ${{ secrets.ADHOC_PROFILE_BASE64 }}
+        run: |
+          if [ -n "$P12" ] && [ -n "$PASSWORD" ] && [ -n "$PROFILE" ]; then
+            echo "adhoc=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "adhoc=false" >> "$GITHUB_OUTPUT"
+            echo "Chưa có secrets ký Ad Hoc → chỉ phát hành bản chưa ký cho SideStore (xem docs/CAI_DAT.md)."
+          fi
+
   build:
     name: Build IPA
     # Capacitor 8.5 (capacitor-swift-pm) được biên dịch bằng Swift 6.2 → cần Xcode 26.
     runs-on: macos-26
     timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -62,6 +89,14 @@ jobs:
         run: |
           xcodebuild -version
           swift --version
+
+      - name: Số phiên bản (major.minor của package.json + số build)
+        id: version
+        run: |
+          VERSION=$(node -p "const [a,b]=require('./package.json').version.split('.'); a+'.'+b+'.'+process.env.GITHUB_RUN_NUMBER")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Phiên bản $VERSION"
 
       - name: Cài thư viện
         run: npm ci
@@ -81,8 +116,6 @@ jobs:
 
       - name: Build app iOS (không ký)
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
           xcodebuild \
             -project ios/App/App.xcodeproj \
             -scheme App \
@@ -105,14 +138,17 @@ jobs:
           grep -E "warning: .*(MeloPlayer|plugins/player)" xcodebuild.log | sort -u | head -40 || true
           tail -3 xcodebuild.log
 
-      - name: Đóng gói IPA
+      - name: Kiểm tra & đóng gói IPA
         run: |
           APP=build/Build/Products/Release-iphoneos/App.app
           test -f "$APP/public/index.html"
           test -f "$APP/capacitor.config.json"
+          test -f "$APP/PrivacyInfo.xcprivacy"
           grep -q MeloPlayerPlugin "$APP/capacitor.config.json"
           grep -q 'Content-Security-Policy' "$APP/public/index.html"
           /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' -c 'Print :CFBundleVersion' -c 'Print :UIBackgroundModes' "$APP/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist")" = "$VERSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :ITSAppUsesNonExemptEncryption' "$APP/Info.plist")" = "false"
           if /usr/libexec/PlistBuddy -c 'Print :NSAppTransportSecurity:NSAllowsArbitraryLoads' "$APP/Info.plist" 2>/dev/null | grep -q true; then
             echo "::error::Info.plist cho phép HTTP không mã hoá (NSAllowsArbitraryLoads)"; exit 1
           fi
@@ -139,34 +175,164 @@ jobs:
           path: xcodebuild.log
           if-no-files-found: ignore
 
+  adhoc:
+    name: Ký Ad Hoc (cài 1 chạm)
+    needs: [signing, build]
+    if: needs.signing.outputs.adhoc == 'true'
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: scripts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Melo-ipa
+
+      - name: Ký bằng chứng chỉ Apple Distribution + hồ sơ Ad Hoc
+        env:
+          SIGNING_CERT_P12_BASE64: ${{ secrets.SIGNING_CERT_P12_BASE64 }}
+          SIGNING_CERT_PASSWORD: ${{ secrets.SIGNING_CERT_PASSWORD }}
+          ADHOC_PROFILE_BASE64: ${{ secrets.ADHOC_PROFILE_BASE64 }}
+        run: scripts/adhoc-sign.sh Melo.ipa Melo-adhoc.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Melo-adhoc
+          path: Melo-adhoc.ipa
+          retention-days: 14
+
   release:
     name: Đăng lên GitHub Release
-    needs: [security, build]
+    needs: [security, build, adhoc]
+    if: ${{ always() && needs.security.result == 'success' && needs.build.result == 'success' && (needs.adhoc.result == 'success' || needs.adhoc.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            docs
+
       - uses: actions/download-artifact@v4
         with:
           name: Melo-ipa
+
+      - uses: actions/download-artifact@v4
+        if: needs.adhoc.result == 'success'
+        with:
+          name: Melo-adhoc
+
+      - name: Tạo source.json (SideStore) và manifest.plist (Ad Hoc)
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
+          ADHOC_ARGS=()
+          if [ -f Melo-adhoc.ipa ]; then
+            ADHOC_ARGS=(--adhoc-ipa-url "$BASE/Melo-adhoc.ipa" --manifest-url "$BASE/manifest.plist")
+          fi
+          cp docs/icon-512.png icon.png
+          node scripts/release-meta.mjs --out meta \
+            --version "$VERSION" --build "${GITHUB_RUN_NUMBER}" \
+            --ipa-url "$BASE/Melo.ipa" --ipa-size "$(stat -c%s Melo.ipa)" \
+            --sha256 "$(cut -d' ' -f1 Melo.ipa.sha256)" \
+            --icon-url "$BASE/icon.png" --source-url "$BASE/source.json" \
+            "${ADHOC_ARGS[@]}"
+          ls -la meta
 
       - name: Đăng bản build (${{ env.RELEASE_TAG }})
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          VERSION=$(date -u +%Y.%m.%d)
-          SHORT_SHA=${GITHUB_SHA::7}
+          BASE="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}"
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          PAGES="https://${OWNER}.github.io/${GITHUB_REPOSITORY#*/}/"
           SHA256=$(cut -d' ' -f1 Melo.ipa.sha256)
-          NOTES="Bản build tự động từ nhánh \`${GITHUB_REF_NAME}\`, commit ${SHORT_SHA} (build ${{ github.run_number }}).
+          ASSETS=(Melo.ipa icon.png meta/source.json)
+          ADHOC_NOTE="Chưa có bản cài 1 chạm (cần tài khoản Apple Developer, xem docs/CAI_DAT.md)."
+          if [ -f Melo-adhoc.ipa ]; then
+            ASSETS+=(Melo-adhoc.ipa meta/manifest.plist)
+            ADHOC_NOTE="**Cài 1 chạm (Ad Hoc):** mở ${PAGES} bằng Safari trên iPhone đã đăng ký → Cài đặt Melo."
+          fi
+          NOTES="Melo ${VERSION} — bản build tự động từ nhánh \`${GITHUB_REF_NAME}\`, commit ${GITHUB_SHA::7}.
 
-          Cài đặt: mở trang này bằng Safari trên iPhone → tải **Melo.ipa** → mở bằng SideStore (hoặc AltStore). Nhạc đã tải vẫn còn sau khi cài bản mới.
+          ${ADHOC_NOTE}
 
-          SHA-256: \`${SHA256}\`"
+          **Cài miễn phí (SideStore/AltStore):** trong SideStore chọn Sources → + → dán \`${BASE}/source.json\` (chỉ làm 1 lần, các bản sau cập nhật bằng 1 chạm). Hoặc tải **Melo.ipa** bên dưới rồi mở bằng SideStore.
+
+          Nhạc đã tải vẫn còn sau khi cài bản mới. SHA-256 của Melo.ipa: \`${SHA256}\`"
           gh release delete "$RELEASE_TAG" --cleanup-tag --yes || true
-          gh release create "$RELEASE_TAG" Melo.ipa \
+          gh release create "$RELEASE_TAG" "${ASSETS[@]}" \
             --target "$GITHUB_SHA" \
-            --title "Melo build ${{ github.run_number }} (${VERSION})" \
+            --title "Melo ${VERSION}" \
             --notes "$NOTES" \
             --latest
+
+  pages:
+    name: Trang cài đặt (GitHub Pages, nếu đã bật)
+    needs: [build, adhoc, release]
+    if: ${{ always() && needs.release.result == 'success' }}
+    # Pages chưa bật thì bước đăng sẽ lỗi — không làm hỏng cả lượt build.
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts
+            docs
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: Melo-ipa
+          path: site
+
+      - uses: actions/download-artifact@v4
+        if: needs.adhoc.result == 'success'
+        with:
+          name: Melo-adhoc
+          path: site
+
+      - name: Tạo trang cài đặt
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          OWNER="${GITHUB_REPOSITORY_OWNER,,}"
+          PAGES="https://${OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          ADHOC_ARGS=()
+          if [ -f site/Melo-adhoc.ipa ]; then
+            ADHOC_ARGS=(--adhoc-ipa-url "$PAGES/Melo-adhoc.ipa" --manifest-url "$PAGES/manifest.plist")
+          fi
+          cp docs/icon-512.png site/icon.png
+          node scripts/release-meta.mjs --out site \
+            --version "$VERSION" --build "${GITHUB_RUN_NUMBER}" \
+            --ipa-url "$PAGES/Melo.ipa" --ipa-size "$(stat -c%s site/Melo.ipa)" \
+            --sha256 "$(cut -d' ' -f1 site/Melo.ipa.sha256)" \
+            --icon-url "$PAGES/icon.png" --source-url "$PAGES/source.json" \
+            "${ADHOC_ARGS[@]}"
+          touch site/.nojekyll
+          ls -la site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

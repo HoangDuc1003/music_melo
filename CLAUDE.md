@@ -27,9 +27,20 @@ Done and verified (62 vitest, 15 XCTest, Playwright screenshot runs at 390×844 
     Now Playing + remote commands, interruptions, route change, sleep timer) + `MeloPlayerPlugin` bridge (hops to main).
   - `src/web.ts` mirrors the semantics with HTML5 audio.
 - **CI** `.github/workflows/ios.yml`: jobs `security` (gitleaks over full git history with `.gitleaks.toml`, `npm audit
-  --omit=dev --audit-level=high`), `build` (macos-26, read-only: vitest → build → cap sync → swift test → unsigned
-  xcodebuild → checks CSP + no NSAllowsArbitraryLoads → `Melo.ipa` + sha256 artifact), `release` (only job with
-  `contents: write`; rolling release tag `ios-latest`). Public repo ⇒ free macOS minutes.
+  --omit=dev --audit-level=high`), `signing` (outputs `adhoc=true` only if the 3 signing secrets exist), `build`
+  (macos-26, read-only: vitest → build → cap sync → swift test → unsigned xcodebuild with
+  `MARKETING_VERSION=<major.minor of package.json>.<run_number>` → checks CSP, PrivacyInfo, export-compliance key, no
+  NSAllowsArbitraryLoads → `Melo.ipa` + sha256), `adhoc` (optional: `scripts/adhoc-sign.sh` re-signs the unsigned IPA
+  with secrets `SIGNING_CERT_P12_BASE64` / `SIGNING_CERT_PASSWORD` / `ADHOC_PROFILE_BASE64` in a temp keychain —
+  **never run/verified yet**, needs the user's paid account), `release` (only job with `contents: write`; rolling tag
+  `ios-latest` with Melo.ipa, icon.png, `source.json` for SideStore/AltStore, plus Melo-adhoc.ipa + manifest.plist when
+  signed), `pages` (continue-on-error; install page at https://hoangduc1003.github.io/spoti_music/ once the user sets
+  Pages source = GitHub Actions). `scripts/release-meta.mjs` generates source.json / manifest.plist / index.html
+  (tested in `scripts/release-meta.test.mjs`). Install guide for the user: `docs/CAI_DAT.md`. Public repo ⇒ free macOS
+  minutes.
+- iOS app: real Melo icon (`AppIcon-512@2x.png` RGB no alpha, rendered from `public/icon.svg`; `docs/icon-512.png`),
+  dark splash, `PrivacyInfo.xcprivacy` (no tracking/collection; UserDefaults CA92.1, file timestamp C617.1) added to the
+  App target resources, `ITSAppUsesNonExemptEncryption=false`.
 - **Player controller** `src/player/` (`queue.ts` pure helpers, `store.ts` Zustand, `controller.ts`): pre-resolve 20
   ahead, `needsUrl`, radio when ≤3 left (not when offline/repeat), Spotify-like *Play next* / *Add to queue* (after
   current + earlier queued items), shuffle keeps current, snapshot restore, history, network change → re-resolve,
@@ -65,7 +76,6 @@ TODO (next sessions):
 2. Device-flow login + YouTube Data API import (playlists, likes); store tokens in the **Keychain** (not
    Preferences/localStorage), never log them (`redact` already masks `access_token`/`refresh_token`).
    OAuth client id/secret from GitHub Secrets at build time (`.env` is git-ignored).
-3. SideStore/AltStore source JSON for in-app updates (repo is public, so it is possible).
 4. Optional: swipe between tabs, haptics, Keyboard plugin (`@capacitor/keyboard`) if the search keyboard misbehaves.
 
 ## Verified YouTube facts (from this PC's VN residential IP, 2026-10-01 — re-run `scripts/probe*.mjs` if broken)

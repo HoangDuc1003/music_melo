@@ -12,26 +12,12 @@ Kế hoạch: [docs/PLAN.md](docs/PLAN.md) · Ghi chú kỹ thuật: [CLAUDE.md]
 
 ## Cài lên iPhone
 
-Mỗi lần có code mới, GitHub Actions tự build file `Melo.ipa`. File này chưa ký; công cụ sideload sẽ ký bằng Apple ID của bạn khi cài.
+Hướng dẫn đầy đủ: **[docs/CAI_DAT.md](docs/CAI_DAT.md)**.
 
-**Tải file:** mở [Releases → ios-latest](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest) bằng Safari trên iPhone, rồi tải `Melo.ipa`.
-
-**Cài bằng một trong các công cụ sau** (dùng Apple ID miễn phí, app hết hạn sau 7 ngày nếu không gia hạn):
-
-| Công cụ | Lần đầu | Gia hạn 7 ngày |
-|---|---|---|
-| **SideStore** (khuyên dùng) | Cần máy Windows/Mac một lần để tạo *pairing file* | Ngay trên iPhone, không cần máy tính |
-| AltStore | Cài AltServer trên máy tính | Tự gia hạn qua Wi‑Fi khi máy tính bật AltServer |
-| Sideloadly | Cắm cáp vào máy Windows/Mac | Phải cài lại từ máy tính |
-
-Với SideStore: mở **Melo.ipa** → *Chia sẻ* → **SideStore**, hoặc trong SideStore chọn **My Apps → +** rồi chọn file.
-
-**Cài bản mới:** làm lại các bước trên. Nhạc đã tải và thư viện vẫn còn, vì mã app (`com.melo.music`) không đổi.
-
-**Lưu ý:**
-
-* Apple ID miễn phí chỉ cài được tối đa 3 app ngoài store, và SideStore chiếm 1.
-* Nên cài Melo trực tiếp, không qua LiveContainer, để phát nền và nhạc đã tải chạy ổn định.
+* **Miễn phí (SideStore):** thêm source `https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json` vào SideStore một lần. Sau đó các bản mới chỉ cần bấm **Update** (gia hạn 7 ngày/lần).
+* **Cài 1 chạm, không cần app thứ ba:** cần tài khoản Apple Developer (99 USD/năm) và làm theo các bước trong `docs/CAI_DAT.md`. Sau đó chỉ cần mở **https://hoangduc1003.github.io/spoti_music/** bằng Safari rồi bấm **Cài đặt Melo**.
+* Nhạc đã tải và thư viện vẫn còn khi cài bản mới, vì mã app (`com.melo.music`) không đổi.
+* Melo không thể lên App Store (lý do và cách làm hợp lệ: [docs/APP_STORE.md](docs/APP_STORE.md)).
 
 ## Dùng app
 
