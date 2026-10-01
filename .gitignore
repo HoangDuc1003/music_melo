@@ -1,0 +1,22 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
+
+# iOS build output (project files ARE committed)
+ios/App/build/
+ios/App/Pods/
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/App/config.xml
+ios/DerivedData/
+*.ipa
+*.xcuserstate
+xcuserdata/
+
+# local Claude settings
+.claude/settings.local.json

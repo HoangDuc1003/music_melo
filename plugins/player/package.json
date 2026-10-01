@@ -1,0 +1,22 @@
+{
+  "name": "capacitor-melo-player",
+  "version": "0.1.0",
+  "description": "Native queue-based audio player (AVPlayer + lock screen controls) for the Melo app",
+  "private": true,
+  "license": "UNLICENSED",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "files": [
+    "src/",
+    "ios/Sources",
+    "Package.swift"
+  ],
+  "capacitor": {
+    "ios": {
+      "src": "ios"
+    }
+  },
+  "peerDependencies": {
+    "@capacitor/core": ">=8.0.0"
+  }
+}
