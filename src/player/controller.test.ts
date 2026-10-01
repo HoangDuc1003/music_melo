@@ -315,15 +315,15 @@ describe('sửa hàng chờ', () => {
 
     await player.addToQueue(tracks('q1'));
     await player.addToQueue(tracks('q2'));
-    expect(storeIds()).toEqual(['a', 'b', 'q1', 'q2', 'r1', 'r2']);
+    expect(storeIds()).toEqual(['a', 'q1', 'q2', 'b', 'r1', 'r2']);
     await player.playNext(tracks('n1'));
-    expect(storeIds()).toEqual(['a', 'n1', 'b', 'q1', 'q2', 'r1', 'r2']);
+    expect(storeIds()).toEqual(['a', 'n1', 'q1', 'q2', 'b', 'r1', 'r2']);
     expect(native.ids()).toEqual(storeIds());
 
     await player.move(6, 0);
     expect(usePlayer.getState().index).toBe(1);
     await player.removeAt(1);
-    expect(storeIds()).toEqual(['r2', 'n1', 'b', 'q1', 'q2', 'r1']);
+    expect(storeIds()).toEqual(['r2', 'n1', 'q1', 'q2', 'b', 'r1']);
     expect(usePlayer.getState().index).toBe(1);
     await player.removeAt(0);
     expect(usePlayer.getState().index).toBe(0);

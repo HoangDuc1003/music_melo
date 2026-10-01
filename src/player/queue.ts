@@ -42,14 +42,14 @@ export function shuffleKeepingCurrent<T>(items: readonly T[], currentIndex: numb
 /**
  * Vị trí chèn kiểu Spotify:
  * - 'next' (Phát tiếp): ngay sau bài đang phát.
- * - 'queue' (Thêm vào hàng chờ): sau các bài người dùng đã thêm, trước bài radio tự nối.
+ * - 'queue' (Thêm vào hàng chờ): sau bài đang phát và các bài người dùng đã thêm trước đó,
+ *   trước phần còn lại của album/playlist và radio.
  */
 export function insertPosition(entries: readonly QueueEntry[], index: number, mode: 'next' | 'queue'): number {
   if (mode === 'next' || index < 0) return Math.max(0, index + 1);
-  for (let i = index + 1; i < entries.length; i++) {
-    if (entries[i].origin === 'radio') return i;
-  }
-  return entries.length;
+  let i = index + 1;
+  while (i < entries.length && entries[i].origin === 'queue') i++;
+  return i;
 }
 
 /** Các chỉ số cần chuẩn bị link: bài hiện tại và `ahead` bài sau (vòng lại đầu nếu lặp cả danh sách). */

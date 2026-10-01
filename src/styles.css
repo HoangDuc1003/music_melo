@@ -44,3 +44,118 @@ body {
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Danh sách dài: trình duyệt bỏ qua vẽ các dòng ngoài màn hình (cuộn mượt mà không cần ảo hoá). */
+.track-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 64px;
+}
+
+/* Ba cột "đang phát" */
+.equalizer > span {
+  width: 3px;
+  height: 30%;
+  border-radius: 1px;
+  background: var(--color-accent);
+}
+.equalizer.is-playing > span {
+  animation: eq 0.9s ease-in-out infinite alternate;
+}
+.equalizer.is-playing > span:nth-child(2) {
+  animation-delay: -0.3s;
+}
+.equalizer.is-playing > span:nth-child(3) {
+  animation-delay: -0.6s;
+}
+@keyframes eq {
+  from {
+    height: 20%;
+  }
+  to {
+    height: 100%;
+  }
+}
+
+.toast-in {
+  animation: toast-in 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+}
+
+/* Thanh tua kiểu Spotify */
+.seek {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 20px;
+  background: transparent;
+  touch-action: none;
+}
+.seek::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #fff var(--seek, 0%), rgba(255, 255, 255, 0.25) var(--seek, 0%));
+}
+.seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+.seek::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #fff var(--seek, 0%), rgba(255, 255, 255, 0.25) var(--seek, 0%));
+}
+.seek::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Công tắc bật/tắt kiểu iOS */
+.toggle {
+  -webkit-appearance: none;
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 46px;
+  height: 28px;
+  border-radius: 14px;
+  background: #535353;
+  transition: background 200ms;
+}
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+.toggle:checked {
+  background: var(--color-accent);
+}
+.toggle:checked::after {
+  transform: translateX(18px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}

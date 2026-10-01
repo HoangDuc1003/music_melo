@@ -1,105 +1,109 @@
-// Màn hình KHUNG tạm thời: tìm kiếm + phát thử để kiểm tra toàn bộ chuỗi
-// (proxy dev → youtubei.js → lấy link → plugin phát nhạc). Giao diện Spotify đầy đủ làm ở GĐ3 (docs/PLAN.md).
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Pause, Play, Search } from 'lucide-react';
-import { formatDuration, joinArtists } from '@/lib/format';
+// Bố cục chính kiểu Spotify: 3 tab (mỗi tab một ngăn xếp trang, giữ nguyên khi chuyển tab),
+// trình phát mini + thanh tab ở dưới, trình phát toàn màn hình và các bảng trượt phủ lên trên.
+import { Component, memo, type ReactNode } from 'react';
+import { FullPlayer } from '@/components/FullPlayer';
+import { MiniPlayer } from '@/components/MiniPlayer';
+import { PageContext } from '@/components/Page';
+import { PlaylistPicker } from '@/components/PlaylistPicker';
+import { SleepTimerSheet } from '@/components/SleepTimerSheet';
+import { TabBar } from '@/components/TabBar';
+import { Toasts } from '@/components/Toasts';
+import { TrackMenu } from '@/components/TrackMenu';
 import { log } from '@/lib/log';
-import { playTracks, togglePlay } from '@/player/controller';
-import { currentEntry, usePlayer } from '@/player/store';
-import { search } from '@/youtube/music';
-import type { Track } from '@/youtube/types';
+import { ArtistPage } from '@/pages/ArtistPage';
+import { AlbumPage, HistoryPage, LikedPage, LocalPlaylistPage, PlaylistPage } from '@/pages/CollectionPages';
+import { HomePage } from '@/pages/HomePage';
+import { LibraryPage } from '@/pages/LibraryPage';
+import { SearchPage } from '@/pages/SearchPage';
+import { DownloadsPage, LogsPage, SettingsPage } from '@/pages/SettingsPages';
+import { useNav, type NavEntry, type Route, type Tab } from '@/ui/nav';
+
+function renderRoute(route: Route): ReactNode {
+  switch (route.name) {
+    case 'home':
+      return <HomePage />;
+    case 'search':
+      return <SearchPage />;
+    case 'library':
+      return <LibraryPage />;
+    case 'album':
+      return <AlbumPage id={route.id} />;
+    case 'artist':
+      return <ArtistPage id={route.id} />;
+    case 'playlist':
+      return <PlaylistPage id={route.id} />;
+    case 'localPlaylist':
+      return <LocalPlaylistPage id={route.id} />;
+    case 'liked':
+      return <LikedPage />;
+    case 'history':
+      return <HistoryPage />;
+    case 'downloads':
+      return <DownloadsPage />;
+    case 'settings':
+      return <SettingsPage />;
+    case 'logs':
+      return <LogsPage />;
+  }
+}
+
+/** Lỗi trong một trang không làm trắng cả app. */
+class PageBoundary extends Component<{ children: ReactNode }, { error?: Error }> {
+  state: { error?: Error } = {};
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  componentDidCatch(error: Error) {
+    log.error('ui', error);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="safe-top flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-subdued">
+        <p>Trang này bị lỗi. Chi tiết ở Cài đặt → Nhật ký.</p>
+        <button className="rounded-full border border-white/40 px-5 py-2 text-sm font-semibold text-white" onClick={() => this.setState({ error: undefined })}>
+          Thử lại
+        </button>
+      </div>
+    );
+  }
+}
+
+/** Một trang trong ngăn xếp: chỉ trang trên cùng của tab đang mở được hiện, các trang khác giữ nguyên (cả vị trí cuộn). */
+const StackPage = memo(function StackPage({ entry, tab, depth, visible }: { entry: NavEntry; tab: Tab; depth: number; visible: boolean }) {
+  return (
+    <div className="absolute inset-0" hidden={!visible}>
+      <PageContext.Provider value={{ tab, depth }}>
+        <PageBoundary>{renderRoute(entry.route)}</PageBoundary>
+      </PageContext.Provider>
+    </div>
+  );
+});
 
 export default function App() {
-  const [input, setInput] = useState('');
-  const [query, setQuery] = useState('');
-  const [error, setError] = useState<string>();
-  const state = usePlayer();
-  const current = currentEntry(state)?.track;
-
-  const results = useQuery({
-    queryKey: ['search', 'song', query],
-    queryFn: () => search(query, 'song'),
-    enabled: query.length > 0
-  });
-
-  async function play(list: Track[], index: number) {
-    setError(undefined);
-    try {
-      await playTracks(list, index, { context: { type: 'search', title: query } });
-    } catch (err) {
-      log.error('app', err);
-      setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  const tracks = (results.data ?? []).flatMap((item) => (item.type === 'track' ? [item.track] : []));
+  const activeTab = useNav((s) => s.tab);
+  const stacks = useNav((s) => s.stacks);
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="safe-top bg-gradient-to-b from-emerald-900/60 to-base px-4 pb-3">
-        <h1 className="pt-4 text-2xl font-bold">Melo</h1>
-        <form
-          className="mt-3 flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-black"
-          onSubmit={(e) => {
-            e.preventDefault();
-            setQuery(input.trim());
-          }}
-        >
-          <Search size={20} />
-          <input
-            className="w-full bg-transparent text-[15px] outline-none placeholder:text-neutral-500"
-            placeholder="Bạn muốn nghe gì?"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-          />
-        </form>
-      </header>
-
-      <main className="no-scrollbar flex-1 overflow-y-auto px-2 pb-28">
-        {results.isFetching && <p className="p-4 text-subdued">Đang tìm…</p>}
-        {results.error && <p className="p-4 text-red-400">Lỗi: {String(results.error)}</p>}
-        {(error || state.error) && <p className="p-4 text-red-400">{error || state.error}</p>}
-        {tracks.map((track, index) => (
-          <button
-            key={track.id}
-            className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left active:bg-highlight"
-            onClick={() => void play(tracks, index)}
-          >
-            <img src={track.thumbnail} alt="" className="size-12 shrink-0 rounded object-cover" loading="lazy" />
-            <div className="min-w-0 flex-1">
-              <div className={`truncate text-[15px] ${current?.id === track.id ? 'text-accent' : ''}`}>{track.title}</div>
-              <div className="truncate text-[13px] text-subdued">{joinArtists(track.artists)}</div>
-            </div>
-            <span className="text-[13px] text-subdued">{formatDuration(track.duration)}</span>
-          </button>
-        ))}
+    <div className="flex h-full flex-col bg-base">
+      <main className="relative min-h-0 flex-1">
+        {(Object.keys(stacks) as Tab[]).map((tab) =>
+          stacks[tab].map((entry, i) => (
+            <StackPage key={entry.key} entry={entry} tab={tab} depth={i} visible={tab === activeTab && i === stacks[tab].length - 1} />
+          ))
+        )}
       </main>
-
-      {current && (
-        <footer className="safe-bottom fixed inset-x-2 bottom-2 rounded-lg bg-[#2a2a2a] p-2 shadow-xl">
-          <div className="flex items-center gap-3">
-            <img src={current.thumbnail} alt="" className="size-10 rounded object-cover" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{current.title}</div>
-              <div className="truncate text-xs text-subdued">{joinArtists(current.artists)}</div>
-            </div>
-            <button
-              className="p-2"
-              aria-label={state.playing ? 'Tạm dừng' : 'Phát'}
-              onClick={() => void togglePlay()}
-            >
-              {state.playing ? <Pause fill="white" /> : <Play fill="white" />}
-            </button>
-          </div>
-          <div className="mt-2 h-0.5 rounded bg-white/20">
-            <div
-              className="h-full rounded bg-white"
-              style={{ width: `${state.duration ? (state.position / state.duration) * 100 : 0}%` }}
-            />
-          </div>
-        </footer>
-      )}
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-30">
+        <div className="pointer-events-auto bg-gradient-to-t from-black via-black/95 to-transparent pt-6">
+          <MiniPlayer />
+          <TabBar />
+        </div>
+      </div>
+      <FullPlayer />
+      <TrackMenu />
+      <PlaylistPicker />
+      <SleepTimerSheet />
+      <Toasts />
     </div>
   );
 }

@@ -6,6 +6,7 @@
   "description": "Melo - personal Spotify-style YouTube Music player for iPhone (Capacitor)",
   "scripts": {
     "dev": "vite",
+    "dev:mock": "vite --mode mock",
     "build": "tsc --noEmit && vite build",
     "build:web": "vite build",
     "typecheck": "tsc --noEmit",

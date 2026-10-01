@@ -13,6 +13,8 @@ const MAX_ENTRIES = 400;
 const STORAGE_KEY = 'melo.logs';
 const entries: LogEntry[] = loadPersisted();
 const listeners = new Set<() => void>();
+/** Tăng mỗi khi nhật ký thay đổi (cho useSyncExternalStore). */
+let version = 0;
 
 function loadPersisted(): LogEntry[] {
   try {
@@ -52,6 +54,7 @@ function write(level: LogLevel, tag: string, parts: unknown[]) {
   const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
   consoleFn(`[${tag}]`, ...parts);
   persistSoon();
+  version += 1;
   listeners.forEach((fn) => fn());
 }
 
@@ -68,7 +71,12 @@ export function getLogs(): readonly LogEntry[] {
 export function clearLogs() {
   entries.length = 0;
   persistSoon();
+  version += 1;
   listeners.forEach((fn) => fn());
+}
+
+export function getLogVersion(): number {
+  return version;
 }
 
 export function subscribeLogs(fn: () => void): () => void {

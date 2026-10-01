@@ -41,8 +41,9 @@ describe('shuffleKeepingCurrent', () => {
 
 describe('insertPosition', () => {
   const entries: QueueEntry[] = [
-    ...makeEntries(tracks('a', 'b', 'c')),
-    ...makeEntries(tracks('q1'), 'queue'),
+    ...makeEntries(tracks('a', 'b')),
+    ...makeEntries(tracks('q1', 'q2'), 'queue'),
+    ...makeEntries(tracks('c')),
     ...makeEntries(tracks('r1', 'r2'), 'radio')
   ];
 
@@ -51,10 +52,11 @@ describe('insertPosition', () => {
     expect(insertPosition([], -1, 'next')).toBe(0);
   });
 
-  it('Thêm vào hàng chờ: trước bài radio', () => {
+  it('Thêm vào hàng chờ: sau các bài đã thêm, trước phần còn lại của danh sách', () => {
     expect(insertPosition(entries, 1, 'queue')).toBe(4);
-    expect(insertPosition(entries, 5, 'queue')).toBe(6);
-    expect(insertPosition(entries.slice(0, 3), 0, 'queue')).toBe(3);
+    expect(insertPosition(entries, 0, 'queue')).toBe(1);
+    expect(insertPosition(entries, 4, 'queue')).toBe(5);
+    expect(insertPosition(entries, 6, 'queue')).toBe(7);
   });
 });
 

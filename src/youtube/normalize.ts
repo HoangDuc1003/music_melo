@@ -61,9 +61,7 @@ function toArtistRefs(list: unknown): ArtistRef[] {
 }
 
 /** Bỏ VL ở đầu id playlist (browseId "VLPL…" → "PL…"). */
-export function playlistIdFromBrowseId(id: string): string {
-  return id.startsWith('VL') ? id.slice(2) : id;
-}
+export { playlistIdFromBrowseId } from './links';
 
 function durationOf(node: Node): number {
   const d = node?.duration;

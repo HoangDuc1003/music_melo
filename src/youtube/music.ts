@@ -164,19 +164,4 @@ export async function getYouTubeLyrics(videoId: string): Promise<{ text: string;
   return { text: text.replace(/\r\n/g, '\n'), source: textOf(shelf?.footer) || undefined };
 }
 
-/** Lấy id playlist / video từ link YouTube hoặc YouTube Music người dùng dán vào. */
-export function parseYouTubeLink(input: string): { playlistId?: string; videoId?: string } | undefined {
-  const trimmed = input.trim();
-  try {
-    const url = new URL(trimmed);
-    if (!/(^|\.)youtube\.com$|(^|\.)youtu\.be$/.test(url.hostname)) return undefined;
-    const playlistId = url.searchParams.get('list') ?? undefined;
-    let videoId = url.searchParams.get('v') ?? undefined;
-    if (url.hostname.endsWith('youtu.be')) videoId = url.pathname.slice(1) || undefined;
-    if (!playlistId && !videoId) return undefined;
-    return { playlistId, videoId };
-  } catch {
-    if (/^(PL|OLAK5uy_|RD|VL)[\w-]{10,}$/.test(trimmed)) return { playlistId: playlistIdFromBrowseId(trimmed) };
-    return undefined;
-  }
-}
+export { parseYouTubeLink } from './links';

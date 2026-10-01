@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { fileURLToPath, URL } from 'node:url';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -58,10 +59,26 @@ function devProxy(): Plugin {
   };
 }
 
-export default defineConfig({
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as { version: string };
+const src = fileURLToPath(new URL('./src', import.meta.url));
+
+export default defineConfig(({ mode }) => ({
   plugins: [react(), tailwindcss(), devProxy()],
   resolve: {
-    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
+    alias: [
+      // `vite --mode mock`: dữ liệu mẫu thay cho YouTube (chạy thử/chụp giao diện khi không vào được YouTube).
+      ...(mode === 'mock'
+        ? [
+            { find: /^@\/youtube\/music$/, replacement: `${src}/youtube/mock/music.ts` },
+            { find: /^@\/youtube\/stream$/, replacement: `${src}/youtube/mock/stream.ts` },
+            { find: /^@\/youtube\/http$/, replacement: `${src}/youtube/mock/http.ts` }
+          ]
+        : []),
+      { find: '@', replacement: src }
+    ]
+  },
+  define: {
+    __APP_VERSION__: JSON.stringify(`${pkg.version}${process.env.GITHUB_RUN_NUMBER ? ` (build ${process.env.GITHUB_RUN_NUMBER})` : ' (dev)'}`)
   },
   build: {
     target: ['es2022', 'safari15'],
@@ -74,4 +91,4 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
     passWithNoTests: true
   }
-});
+}));

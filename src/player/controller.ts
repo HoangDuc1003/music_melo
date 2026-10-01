@@ -427,8 +427,15 @@ export function cycleRepeat() {
   return setRepeat(order[(order.indexOf(repeat) + 1) % order.length]);
 }
 
+const AUTOPLAY_KEY = 'melo.autoplay';
+
 export function setAutoplay(autoplay: boolean) {
   set({ autoplay });
+  try {
+    localStorage.setItem(AUTOPLAY_KEY, autoplay ? '1' : '0');
+  } catch {
+    // bỏ qua
+  }
   if (autoplay) void maybeAppendRadio();
 }
 
@@ -514,6 +521,11 @@ async function watchNetwork() {
 /** Gọi một lần khi app khởi động. */
 export function initPlayer(): Promise<void> {
   initialized ??= (async () => {
+    try {
+      if (localStorage.getItem(AUTOPLAY_KEY) === '0') set({ autoplay: false });
+    } catch {
+      // bỏ qua
+    }
     // Mỗi listener là một hàm riêng (Capacitor gỡ listener theo tham chiếu hàm).
     await MeloPlayer.addListener('state', (s) => onState(s));
     await MeloPlayer.addListener('itemChanged', (e) => onItemChanged(e));
