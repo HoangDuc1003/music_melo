@@ -74,16 +74,36 @@ Done and verified (85 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright s
   eagerly), right-sized artwork (`lib/images.ts`), `content-visibility` rows, rAF position (~15 fps) only while
   visible. Download progress is coalesced (first event + completion immediate, otherwise ≤4 store updates/s); the
   Downloads page (always mounted) only re-renders tiny `DownloadStatusLine` / memo `PendingRow` subscribers.
-- `npm run dev:mock` (aliases `@/youtube/{music,stream,http}` → `src/youtube/mock/`) for UI work without YouTube.
+- **Spotify sync** `src/sync/` (user guide `docs/SPOTIFY.md`; Gmail login does NOT sync Spotify — Spotify needs its own
+  OAuth, the user may pick "Continue with Google" on Spotify's page): `spotify-auth.ts` Authorization Code + **PKCE**
+  (no client secret), user pastes their own Development-Mode **Client ID** in Settings (or `VITE_SPOTIFY_CLIENT_ID`),
+  redirect `com.melo.music://spotify/callback` (CFBundleURLTypes in Info.plist, `App` `appUrlOpen` → `Browser.close`),
+  state checked, verifier single-use (10 min), tokens in **Keychain** via `MeloPlayer.keychainGet/Set/Remove`
+  (`MeloKeychain.swift`, AfterFirstUnlockThisDeviceOnly; web = localStorage) through `src/lib/secure.ts`, single-flight
+  refresh, `invalid_grant` → disconnect. `spotify-api.ts`: `/me`, `/me/playlists`, `/playlists/{id}/items` (entry
+  `item` ?? `track`), `/me/tracks`; 401 → refresh once, 429/5xx → Retry-After backoff; only follows `next` links on
+  api.spotify.com. `match.ts`: fold diacritics, Dice similarity, score = .55 title + .3 artist + .15 duration, needs
+  ≥ .7 and artist ≥ .4 (covers rejected), songs then videos, cache `db.spotifyMatches` (misses retried after 7 days,
+  network errors not cached), `Semaphore(2)`. `spotify-sync.ts`: playlists owned/collaborative + Liked Songs →
+  `db.playlists` rows `source: 'spotify'` (`spotifyId`, `snapshotId`, `unmatched`; DB v2), skip unchanged snapshot,
+  delete playlists removed on Spotify (never `export:` ones), auto-sync on launch/resume if > 12 h, single-flight;
+  `importSpotifyExport` reads Playlist*.json / YourLibrary.json (no Premium needed). Spotify code is lazy-loaded
+  (main.tsx dynamic import + `React.lazy` in Settings) so the initial bundle stays ~148 KB gzip.
+  Spotify rules since Feb/Mar 2026 (dev mode): owner needs **Premium**, 1 client ID, ≤ 5 users, only owned/collab
+  playlists readable, refresh tokens expire after 6 months. This container cannot reach *.spotify.com — the flow is
+  verified with unit tests + `dev:mock` (`src/sync/mock/`), not against real Spotify yet.
+- `npm run dev:mock` (aliases `@/youtube/{music,stream,http}` → `src/youtube/mock/`, `@/sync/spotify-{auth,api}` →
+  `src/sync/mock/`) for UI work without YouTube/Spotify.
 
 NOT verified on a real iPhone yet (no device here): background playback across tracks, lock screen, FileTransfer
 downloads, AVPlayer with googlevideo headers. First thing to do when the user reports back: read their in-app log.
 
 TODO (next sessions):
 1. User test on iPhone with the checklist in docs/PLAN.md §5; fix from the in-app log.
-2. Device-flow login + YouTube Data API import (playlists, likes); store tokens in the **Keychain** (not
-   Preferences/localStorage), never log them (`redact` already masks `access_token`/`refresh_token`).
-   OAuth client id/secret from GitHub Secrets at build time (`.env` is git-ignored).
+2. Device-flow login + YouTube Data API import (playlists, likes); store tokens with `src/lib/secure.ts` (Keychain),
+   never log them (`redact` already masks `access_token`/`refresh_token`). OAuth client id/secret from GitHub Secrets
+   at build time (`.env` is git-ignored). Spotify sync is done (above) and can serve as the template.
+3. First real-device Spotify test: user creates the Spotify app per docs/SPOTIFY.md; check redirect + Keychain + sync.
 4. Optional: swipe between tabs, haptics, Keyboard plugin (`@capacitor/keyboard`) if the search keyboard misbehaves.
 
 ## Verified YouTube facts (from this PC's VN residential IP, 2026-10-01 — re-run `scripts/probe*.mjs` if broken)

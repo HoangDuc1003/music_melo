@@ -84,6 +84,11 @@ export interface MeloPlayerPlugin {
   setSleepTimer(options: { minutes: number; endOfItem?: boolean }): Promise<void>;
   getState(): Promise<PlayerState>;
 
+  /** Keychain iOS cho token đăng nhập (bản web: localStorage, chỉ để chạy thử). */
+  keychainGet(options: { key: string }): Promise<{ value: string | null }>;
+  keychainSet(options: { key: string; value: string }): Promise<void>;
+  keychainRemove(options: { key: string }): Promise<void>;
+
   addListener(eventName: 'state', listener: (state: PlayerState) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'itemChanged', listener: (event: ItemChangedEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'needsUrl', listener: (event: NeedsUrlEvent) => void): Promise<PluginListenerHandle>;

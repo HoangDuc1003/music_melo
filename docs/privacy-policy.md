@@ -22,6 +22,7 @@ Khi bạn dùng app, iPhone kết nối **trực tiếp** tới các dịch vụ
 |---|---|
 | Nguồn nhạc của phiên bản app | Tìm kiếm, phát, tải nhạc |
 | LRCLIB (lrclib.net) | Lời bài hát |
+| Spotify (accounts.spotify.com, api.spotify.com) | Chỉ khi bạn kết nối Spotify: đọc playlist và bài hát đã thích để đồng bộ |
 | Máy chủ ảnh của nguồn nhạc | Ảnh bìa |
 
 Melo không dùng công cụ phân tích, quảng cáo hay theo dõi nào, và không theo dõi bạn giữa các app hay website.
@@ -33,6 +34,13 @@ Nếu bạn chọn kết nối tài khoản Google để nhập playlist:
 * App chỉ xin quyền **chỉ đọc** (`youtube.readonly`).
 * Mã đăng nhập được lưu trong Keychain của iPhone, không gửi đi đâu khác.
 * Có thể ngắt kết nối bất cứ lúc nào trong Cài đặt hoặc tại https://myaccount.google.com/permissions.
+
+Nếu bạn chọn kết nối Spotify để đồng bộ playlist:
+
+* App chỉ xin quyền **chỉ đọc** (`playlist-read-private`, `playlist-read-collaborative`, `user-library-read`).
+* Mã đăng nhập được lưu trong Keychain của iPhone, chỉ gửi tới Spotify.
+* Danh sách bài đọc được chỉ dùng để tạo playlist trên máy bạn.
+* Có thể ngắt kết nối trong Cài đặt hoặc tại https://www.spotify.com/account/apps/.
 
 ## Trẻ em
 
@@ -46,4 +54,4 @@ EMAIL_LIEN_HE
 
 ## Privacy Policy (English summary)
 
-Melo does not collect, store on any server, or share personal data. There is no Melo server: your library, playlists, history and downloads stay on your iPhone. The app connects directly from your device to the music source, lyrics (LRCLIB) and artwork hosts, which receive your IP address under their own policies. No analytics, advertising or tracking. Optional Google sign-in (read-only scope) keeps its token in the iOS Keychain. Contact: EMAIL_LIEN_HE.
+Melo does not collect, store on any server, or share personal data. There is no Melo server: your library, playlists, history and downloads stay on your iPhone. The app connects directly from your device to the music source, lyrics (LRCLIB) and artwork hosts, which receive your IP address under their own policies. No analytics, advertising or tracking. Optional Google sign-in (read-only scope) and optional Spotify connection (read-only playlist and library scopes, used only to build playlists on the device) keep their tokens in the iOS Keychain. Contact: EMAIL_LIEN_HE.

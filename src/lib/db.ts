@@ -13,10 +13,16 @@ export interface PlaylistRow {
   description?: string;
   /** Ảnh bìa tự chọn; mặc định lấy ảnh bài đầu */
   cover?: string;
-  /** 'youtube' = nhập từ tài khoản YouTube */
-  source: 'local' | 'youtube';
+  /** 'youtube' / 'spotify' = nhập từ tài khoản đó (đồng bộ lại sẽ ghi đè danh sách bài) */
+  source: 'local' | 'youtube' | 'spotify';
   /** id playlist gốc trên YouTube (để nhập lại không bị trùng) */
   ytId?: string;
+  /** id playlist gốc trên Spotify ('liked' = Bài hát đã thích, 'export:<tên>' = nhập từ file) */
+  spotifyId?: string;
+  /** snapshot_id của Spotify: không đổi thì không cần tải lại danh sách bài */
+  snapshotId?: string;
+  /** số bài Spotify không tìm thấy trên YouTube Music */
+  unmatched?: number;
   trackIds: string[];
   createdAt: number;
   updatedAt: number;
@@ -65,6 +71,14 @@ export interface LyricsRow {
   fetchedAt: number;
 }
 
+/** Kết quả ghép một bài Spotify với YouTube Music (không có `videoId` = chưa tìm thấy, thử lại sau). */
+export interface SpotifyMatchRow {
+  /** id bài trên Spotify, hoặc "tên|nghệ sĩ" khi nhập từ file không có id */
+  id: string;
+  videoId?: string;
+  checkedAt: number;
+}
+
 export interface SettingRow {
   key: string;
   value: unknown;
@@ -80,6 +94,7 @@ export class MeloDB extends Dexie {
   searches!: EntityTable<SearchRow, 'query'>;
   lyrics!: EntityTable<LyricsRow, 'id'>;
   settings!: EntityTable<SettingRow, 'key'>;
+  spotifyMatches!: EntityTable<SpotifyMatchRow, 'id'>;
 
   constructor() {
     super('melo');
@@ -93,6 +108,11 @@ export class MeloDB extends Dexie {
       searches: 'query, at',
       lyrics: 'id',
       settings: 'key'
+    });
+    // v2: đồng bộ Spotify
+    this.version(2).stores({
+      playlists: '++id, name, updatedAt, ytId, spotifyId',
+      spotifyMatches: 'id, checkedAt'
     });
   }
 }

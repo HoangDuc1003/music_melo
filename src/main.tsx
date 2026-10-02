@@ -15,7 +15,10 @@ void initPlayer()
   .then(() => initDownloads())
   .catch((err) => log.error('download', 'khởi động phần tải về lỗi:', err))
   .then(() => pruneHistory())
-  .catch((err) => log.warn('library', 'dọn lịch sử lỗi:', err));
+  .catch((err) => log.warn('library', 'dọn lịch sử lỗi:', err))
+  .then(() => import('@/sync/spotify-sync'))
+  .then((spotify) => spotify.initSpotify())
+  .catch((err) => log.warn('spotify', 'khởi động đồng bộ Spotify lỗi:', err));
 
 const queryClient = new QueryClient({
   defaultOptions: {

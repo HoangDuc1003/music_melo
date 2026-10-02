@@ -24,7 +24,10 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "previous", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setRepeat", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setSleepTimer", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getState", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "getState", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "keychainGet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "keychainSet", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "keychainRemove", returnType: CAPPluginReturnPromise)
     ]
 
     private var engine: MeloAudioEngine?
@@ -132,6 +135,35 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             call.resolve(self.ensureEngine().state)
         }
+    }
+
+    // Keychain (token đăng nhập). Đặt ở plugin này để không phải đăng ký thêm plugin native.
+
+    @objc func keychainGet(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else { return call.reject("Thiếu key") }
+        if let value = MeloKeychain.get(key) {
+            call.resolve(["value": value])
+        } else {
+            call.resolve(["value": NSNull()])
+        }
+    }
+
+    @objc func keychainSet(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty, let value = call.getString("value") else {
+            return call.reject("Thiếu key/value")
+        }
+        let status = MeloKeychain.set(value, for: key)
+        if status == errSecSuccess {
+            call.resolve()
+        } else {
+            call.reject("Không lưu được vào Keychain (\(status))")
+        }
+    }
+
+    @objc func keychainRemove(_ call: CAPPluginCall) {
+        guard let key = call.getString("key"), !key.isEmpty else { return call.reject("Thiếu key") }
+        MeloKeychain.remove(key)
+        call.resolve()
     }
 
     private func parseItems(_ array: JSArray?) -> [QueueItem] {

@@ -14,6 +14,14 @@ describe('redact', () => {
     expect(redact('Lạc trôi via VISIONOS in 812ms')).toBe('Lạc trôi via VISIONOS in 812ms');
   });
 
+  it('ẩn mã đăng nhập Spotify (PKCE) và token đã lưu', () => {
+    expect(redact('com.melo.music://spotify/callback?code=AQB1x&state=Zz9')).toBe('com.melo.music://spotify/callback?code=***&state=***');
+    expect(redact('grant_type=authorization_code&code_verifier=abc123&client_id=0123')).toBe(
+      'grant_type=authorization_code&code_verifier=***&client_id=0123'
+    );
+    expect(redact('{"accessToken":"BQD","refreshToken":"AQC","clientId":"0123"}')).toBe('{"accessToken":"***","refreshToken":"***","clientId":"0123"}');
+  });
+
   it('nhật ký luôn đã được làm sạch', () => {
     log.error('download', new Error('HTTP 403 https://r1.googlevideo.com/videoplayback?ip=1.2.3.4'));
     const last = getLogs().at(-1)!;

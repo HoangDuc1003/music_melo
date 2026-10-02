@@ -39,6 +39,13 @@
 - **Thích một bài là tự tải về** (bật trong Cài đặt).
 - Nhạc lưu trong thư mục của app, **không đồng bộ lên iCloud**, và vẫn còn khi cài bản mới.
 
+### Đồng bộ Spotify 🔄
+
+- **Kết nối Spotify một lần**, có thể đăng nhập bằng Google trên trang của Spotify. Playlist của bạn và *Bài hát đã thích* hiện trong Thư viện với nhãn **Từ Spotify**.
+- Melo tự tìm từng bài trên YouTube Music: so tên bài, nghệ sĩ và thời lượng, không ghép nhầm bản cover.
+- **Tự đồng bộ khi mở app.** Playlist không đổi thì bỏ qua.
+- Không có Premium: nhập từ file dữ liệu Spotify. Hướng dẫn: [docs/SPOTIFY.md](docs/SPOTIFY.md).
+
 ### Thư viện 📚
 
 - Bài hát đã thích, playlist tự tạo, lịch sử nghe, lịch sử tìm kiếm.
@@ -202,6 +209,7 @@ spoti_music/
 │   ├── components/             # Trình phát mini/toàn màn hình, hàng chờ, lời bài hát, menu bài
 │   ├── player/                 # Bộ điều khiển: hàng chờ, lấy link trước, radio, lưu/khôi phục
 │   ├── downloads/              # Tải về: hàng đợi, tải song song tự điều chỉnh, lưu file
+│   ├── sync/                   # Đồng bộ Spotify: đăng nhập PKCE, Web API, ghép bài sang YouTube Music
 │   ├── youtube/                # youtubei.js, BotGuard, chọn client, dữ liệu mẫu (mock/)
 │   ├── lib/                    # IndexedDB (Dexie), thư viện, lời bài hát, nhật ký lỗi
 │   └── ui/                     # Điều hướng theo tab, lớp phủ, thông báo
@@ -222,6 +230,7 @@ spoti_music/
 | **Giao diện** | React 19, TypeScript, Vite, Tailwind CSS 4, Zustand, TanStack Query |
 | **App iPhone** | Capacitor 8, plugin Swift tự viết (AVPlayer, MediaPlayer, AVAudioSession) |
 | **Nguồn nhạc** | youtubei.js (InnerTube), BotGuard / PO token (bgutils-js) |
+| **Đồng bộ Spotify** | Spotify Web API, OAuth PKCE (không client secret), token trong Keychain, ghép bài sang YouTube Music |
 | **Lưu trên máy** | IndexedDB (Dexie), file nhạc trong `Library/NoCloud`, File Transfer |
 | **Lời bài hát** | LRCLIB, dự phòng bằng lời trên YouTube |
 | **Kiểm thử** | Vitest (85 test), XCTest (15 test), Playwright (9 luồng giao diện) |

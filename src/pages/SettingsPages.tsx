@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import {
   CELLULAR_MAX,
   getAutoDownloadLiked,
@@ -19,6 +19,9 @@ import { setAutoplay } from '@/player/controller';
 import { usePlayer } from '@/player/store';
 import { navigate } from '@/ui/nav';
 import { openSleepTimer, toast } from '@/ui/overlays';
+
+// Phần Spotify nạp riêng (không làm nặng lúc mở app).
+const SpotifySection = lazy(() => import('./SpotifySettings').then((m) => ({ default: m.SpotifySection })));
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -72,6 +75,12 @@ export function SettingsPage() {
           right={<input type="checkbox" className="toggle" checked={autoplay} onChange={(e) => setAutoplay(e.target.checked)} aria-label="Tự phát bài tương tự" />}
         />
         <Item label="Hẹn giờ tắt" detail="Dừng nhạc sau một khoảng thời gian" onClick={openSleepTimer} />
+      </Section>
+
+      <Section title="Spotify">
+        <Suspense fallback={<div className="h-[60px]" />}>
+          <SpotifySection />
+        </Suspense>
       </Section>
 
       <Section title="Tải về">

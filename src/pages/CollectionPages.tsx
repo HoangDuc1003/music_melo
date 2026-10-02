@@ -100,7 +100,11 @@ export function LocalPlaylistPage({ id }: { id: number }) {
       <CollectionView
         title={playlist.name}
         artwork={playlist.cover ?? tracks[0]?.thumbnail}
-        subtitle="Playlist của tôi"
+        subtitle={
+          playlist.source === 'spotify'
+            ? `Đồng bộ từ Spotify${playlist.unmatched ? ` • ${playlist.unmatched} bài chưa có trên YouTube Music` : ''}`
+            : 'Playlist của tôi'
+        }
         tracks={tracks}
         context={{ type: 'playlist', id: `local-${id}`, title: playlist.name }}
         menuFor={(index) => ({ playlist: { id, index } })}

@@ -14,9 +14,12 @@ export function getHome(): Promise<Shelf[]> {
 export function search(query: string, type: SearchType): Promise<ShelfItem[]> {
   const q = fold(query);
   const match = (text: string) => fold(text).includes(q) || q.length < 2;
+  // Câu nhiều từ ("Mưa Tháng Sáu Hà Anh"): mọi từ đều phải có trong tên bài + nghệ sĩ.
+  const words = q.split(/\s+/).filter(Boolean);
+  const matchTrack = (t: Track) => match(t.title) || match(t.artists[0].name) || words.every((w) => fold(`${t.title} ${t.artists[0].name}`).includes(w));
   let items: ShelfItem[];
   if (type === 'song' || type === 'video') {
-    items = TRACKS.filter((t) => match(t.title) || match(t.artists[0].name)).map((track) => ({
+    items = TRACKS.filter(matchTrack).map((track) => ({
       type: 'track',
       track: type === 'video' ? { ...track, isVideo: true } : track
     }));

@@ -46,10 +46,10 @@ export function redact(text: string): string {
     .replace(/https?:\/\/[^\s"'<>]*googlevideo\.com[^\s"'<>]*/gi, 'https://…googlevideo.com/[link đã ẩn]')
     .replace(/\b(Bearer)\s+[\w.~+/-]+=*/gi, '$1 ***')
     .replace(
-      /\b(access_token|refresh_token|id_token|client_secret|device_code|code|token|pot|po_token|key|sig|signature|lsig|ip|ipbits)=[^&\s"'<>]+/gi,
+      /\b(access_token|refresh_token|id_token|client_secret|device_code|code_verifier|code|state|token|pot|po_token|key|sig|signature|lsig|ip|ipbits)=[^&\s"'<>]+/gi,
       '$1=***'
     )
-    .replace(/("(?:access_token|refresh_token|id_token|client_secret|device_code)"\s*:\s*")[^"]*"/gi, '$1***"')
+    .replace(/("(?:access_token|refresh_token|accessToken|refreshToken|id_token|client_secret|device_code|code_verifier)"\s*:\s*")[^"]*"/gi, '$1***"')
     .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, 'x.x.x.x')
     .replace(/\b(?:[0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}\b/gi, 'x:x:x:x');
 }

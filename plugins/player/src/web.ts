@@ -249,4 +249,17 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
   async getState(): Promise<PlayerState> {
     return this.buildState();
   }
+
+  // Trình duyệt không có Keychain: dùng localStorage, chỉ để chạy thử trên PC.
+  async keychainGet({ key }: { key: string }): Promise<{ value: string | null }> {
+    return { value: localStorage.getItem(`melo.secure.${key}`) };
+  }
+
+  async keychainSet({ key, value }: { key: string; value: string }): Promise<void> {
+    localStorage.setItem(`melo.secure.${key}`, value);
+  }
+
+  async keychainRemove({ key }: { key: string }): Promise<void> {
+    localStorage.removeItem(`melo.secure.${key}`);
+  }
 }

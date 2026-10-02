@@ -114,7 +114,7 @@ export function LibraryPage() {
           key={p.id}
           route={{ name: 'localPlaylist', id: p.id! }}
           title={p.name}
-          subtitle={`Playlist • ${p.trackIds.length} bài`}
+          subtitle={`${p.source === 'spotify' ? 'Từ Spotify' : 'Playlist'} • ${p.trackIds.length} bài`}
           icon={<Artwork src={p.cover} size={56} className="size-14 shrink-0" />}
         />
       ))}

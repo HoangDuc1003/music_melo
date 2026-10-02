@@ -10,7 +10,7 @@ import tailwindcss from '@tailwindcss/vite';
 // Chỉ dùng khi chạy thử trên PC (npm run dev): trình duyệt không gọi thẳng YouTube được (CORS),
 // nên mọi request được chuyển qua /__proxy/<host>/<path>. Trên iPhone, app gọi bằng HTTP native nên không cần.
 const PROXY_PREFIX = '/__proxy/';
-const ALLOWED_HOST = /(^|\.)(youtube\.com|googlevideo\.com|googleapis\.com|ytimg\.com|googleusercontent\.com|gstatic\.com|google\.com|lrclib\.net)$/;
+const ALLOWED_HOST = /(^|\.)(youtube\.com|googlevideo\.com|googleapis\.com|ytimg\.com|googleusercontent\.com|gstatic\.com|google\.com|lrclib\.net|accounts\.spotify\.com|api\.spotify\.com)$/;
 const DROP_REQUEST_HEADERS = new Set(['host', 'connection', 'origin', 'referer', 'cookie', 'accept-encoding', 'content-length', 'sec-fetch-site', 'sec-fetch-mode', 'sec-fetch-dest']);
 const DROP_RESPONSE_HEADERS = new Set(['content-encoding', 'content-length', 'transfer-encoding', 'connection', 'set-cookie', 'alt-svc', 'strict-transport-security']);
 
@@ -109,7 +109,8 @@ export default defineConfig(({ mode }) => ({
         ? [
             { find: /^@\/youtube\/music$/, replacement: `${src}/youtube/mock/music.ts` },
             { find: /^@\/youtube\/stream$/, replacement: `${src}/youtube/mock/stream.ts` },
-            { find: /^@\/youtube\/http$/, replacement: `${src}/youtube/mock/http.ts` }
+            { find: /^@\/youtube\/http$/, replacement: `${src}/youtube/mock/http.ts` },
+            { find: /^@\/sync\/spotify-(auth|api)$/, replacement: `${src}/sync/mock/spotify-$1.ts` }
           ]
         : []),
       { find: '@', replacement: src }
