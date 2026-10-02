@@ -13,6 +13,7 @@ export type Route =
   | { name: 'artist'; id: string }
   | { name: 'playlist'; id: string }
   | { name: 'localPlaylist'; id: number }
+  | { name: 'mix'; id: string }
   | { name: 'liked' }
   | { name: 'history' }
   | { name: 'downloads' }

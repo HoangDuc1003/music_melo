@@ -1,13 +1,17 @@
 // Các trang danh sách: album, playlist YouTube, playlist của tôi, bài đã thích, lịch sử.
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { BookmarkPlus, EllipsisVertical, Heart, Pencil, Trash2 } from 'lucide-react';
 import { CollectionView } from '@/components/CollectionView';
 import { Centered, Page, PageError, PageLoading } from '@/components/Page';
+import { MixCover } from '@/components/MixCard';
 import { PlaylistNameForm } from '@/components/PlaylistNameForm';
 import { Sheet, SheetItem } from '@/components/Sheet';
 import { TrackRow } from '@/components/TrackRow';
 import { clearHistory, createPlaylist, deletePlaylist, renamePlaylist, useLikedTracks, usePlaylist, useRecentTracks } from '@/lib/library';
+import { getTracks } from '@/lib/db';
+import { getMix } from '@/lib/recommend';
 import { playTracks } from '@/player/controller';
 import { back, navigate } from '@/ui/nav';
 import { confirmAction, runAction } from '@/ui/overlays';
@@ -131,6 +135,33 @@ export function LocalPlaylistPage({ id }: { id: number }) {
         )}
       </Sheet>
     </>
+  );
+}
+
+/** Mix "Dành cho bạn" (Daily Mix, Khám phá hằng tuần…). */
+export function MixPage({ id }: { id: string }) {
+  const data = useLiveQuery(async () => {
+    const mix = await getMix(id);
+    return mix ? { mix, tracks: await getTracks(mix.trackIds) } : null;
+  }, [id]);
+  if (data === undefined) return <PageLoading />;
+  if (data === null) {
+    return (
+      <Page solidHeader>
+        <Centered>Mix này đã được làm mới. Về Trang chủ để xem mix hôm nay.</Centered>
+      </Page>
+    );
+  }
+  const { mix, tracks } = data;
+  return (
+    <CollectionView
+      title={mix.title}
+      subtitle={mix.subtitle}
+      artwork={mix.cover}
+      cover={<MixCover mix={mix} className="w-[62%] max-w-72 shadow-2xl" />}
+      tracks={tracks}
+      context={{ type: 'playlist', id: `mix-${mix.id}`, title: mix.title }}
+    />
   );
 }
 

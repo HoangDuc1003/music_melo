@@ -64,6 +64,13 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   player (drag down to close, artwork colour), queue sheet (drag handles), LRCLIB/YouTube lyrics, track menu, playlist
   picker, sleep timer, toasts, offline banner. Pages: Home, Search (suggestions, history, paste YouTube link), Library,
   Album, Artist, Playlist, Local playlist, Liked, History, Downloads, Settings, Logs.
+- **Recommendations** `src/lib/recommend.ts` ("Dành cho bạn" on Home, `MixCard`, route `mix` → `MixPage`): on-device
+  from history (90 days) + likes (like = 3 plays). Kinds: `repeat` (≥2 plays in 30 days), `daily` 1–3 (top artists with
+  ≥2 known tracks: known tracks interleaved 1:2 with radio of their top track), `discover` (radio of top 5 tracks, only
+  never-heard ids, ranked by how many seeds suggested them; weekly, Monday key), `daylist` (tracks played in the same
+  part of day). Radio = `getUpNext` (YouTube, or Jamendo in the web flavor). Stored in `db.settings['mixes']` with a
+  per-kind period (day / week / day+part); only stale kinds are rebuilt, failures keep the old mixes; radio tracks are
+  saved to `db.tracks` so mixes open offline.
 - **Library/lyrics**: `src/lib/library.ts` (likes, local playlists, history, search history), `src/lib/lyrics.ts`
   (LRCLIB `/get` → `/search` → YouTube, cached in `db.lyrics`; network failures are not cached as misses).
 - **Downloads** `src/downloads/`: `storage.ts` (iPhone: `Library/NoCloud/music/<id>.m4a|.jpg|.json`, download to

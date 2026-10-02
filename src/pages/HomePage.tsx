@@ -1,14 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { Settings } from 'lucide-react';
+import { MixCard } from '@/components/MixCard';
 import { TrackArtwork } from '@/components/TrackArtwork';
 import { ErrorState, Page, RootTitle } from '@/components/Page';
 import { Shelf } from '@/components/Shelf';
 import { greeting } from '@/lib/format';
 import { useRecentTracks } from '@/lib/library';
 import { errorMessage } from '@/lib/log';
+import { currentPeriods, getMixes } from '@/lib/recommend';
 import { playTracks } from '@/player/controller';
 import { navigate } from '@/ui/nav';
-import { getHome } from '@/youtube/music';
+import { getHome, getUpNext } from '@/youtube/music';
 
 function ShelfSkeleton() {
   return (
@@ -37,6 +39,31 @@ function HomeError({ error, onRetry }: { error: unknown; onRetry: () => void }) 
         Mở Cài đặt
       </button>
     </>
+  );
+}
+
+/** "Dành cho bạn": mix tạo từ lịch sử nghe (xem lib/recommend.ts). Chưa nghe đủ thì chưa hiện. */
+function ForYou() {
+  // Đổi buổi (sáng → trưa…) thì tạo lại mix theo giờ; còn lại đọc bản đã lưu.
+  const period = currentPeriods(new Date()).daylist;
+  const mixes = useQuery({
+    queryKey: ['mixes', period],
+    queryFn: () => getMixes((seed) => getUpNext(seed.id)),
+    staleTime: 15 * 60_000,
+    refetchInterval: 15 * 60_000
+  });
+  if (!mixes.data?.length) return null;
+  return (
+    <section className="mt-7">
+      <h2 className="px-4 text-[20px] font-bold leading-tight">Dành cho bạn</h2>
+      <div className="no-scrollbar mt-3 flex snap-x gap-3 overflow-x-auto scroll-px-4 px-4">
+        {mixes.data.map((mix) => (
+          <div key={mix.id} className="snap-start">
+            <MixCard mix={mix} />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -71,6 +98,7 @@ export function HomePage() {
         </div>
       )}
 
+      <ForYou />
       {home.isPending && [0, 1, 2].map((i) => <ShelfSkeleton key={i} />)}
       {home.isError && <HomeError error={home.error} onRetry={() => void home.refetch()} />}
       {home.data?.map((shelf) => <Shelf key={shelf.title} shelf={shelf} />)}

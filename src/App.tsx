@@ -12,7 +12,7 @@ import { Toasts } from '@/components/Toasts';
 import { TrackMenu } from '@/components/TrackMenu';
 import { log } from '@/lib/log';
 import { ArtistPage } from '@/pages/ArtistPage';
-import { AlbumPage, HistoryPage, LikedPage, LocalPlaylistPage, PlaylistPage } from '@/pages/CollectionPages';
+import { AlbumPage, HistoryPage, LikedPage, LocalPlaylistPage, MixPage, PlaylistPage } from '@/pages/CollectionPages';
 import { HomePage } from '@/pages/HomePage';
 import { LibraryPage } from '@/pages/LibraryPage';
 import { SearchPage } from '@/pages/SearchPage';
@@ -37,6 +37,8 @@ function renderRoute(route: Route): ReactNode {
       return <PlaylistPage id={route.id} />;
     case 'localPlaylist':
       return <LocalPlaylistPage id={route.id} />;
+    case 'mix':
+      return <MixPage id={route.id} />;
     case 'liked':
       return <LikedPage />;
     case 'history':
