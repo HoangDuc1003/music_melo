@@ -54,6 +54,12 @@ export function redact(text: string): string {
     .replace(/\b(?:[0-9a-f]{1,4}:){4,7}[0-9a-f]{1,4}\b/gi, 'x:x:x:x');
 }
 
+/** Thông báo lỗi để hiện cho người dùng; lỗi của plugin Capacitor không phải lúc nào cũng là `Error`. */
+export function errorMessage(err: unknown, fallback = String(err)): string {
+  const message = err && typeof err === 'object' && 'message' in err ? String(err.message) : '';
+  return message || fallback;
+}
+
 function stringify(value: unknown): string {
   if (value instanceof Error) return `${value.name}: ${value.message}`;
   if (typeof value === 'string') return value;
@@ -64,15 +70,19 @@ function stringify(value: unknown): string {
   }
 }
 
+/** Nhật ký vừa đổi: lưu (trễ một chút) và báo cho màn hình Nhật ký. */
+function changed() {
+  persistSoon();
+  version += 1;
+  listeners.forEach((fn) => fn());
+}
+
 function write(level: LogLevel, tag: string, parts: unknown[]) {
   const entry: LogEntry = { time: Date.now(), level, tag, message: redact(parts.map(stringify).join(' ')).slice(0, 2000) };
   entries.push(entry);
   if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
-  const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.info;
-  consoleFn(`[${tag}]`, entry.message);
-  persistSoon();
-  version += 1;
-  listeners.forEach((fn) => fn());
+  console[level](`[${tag}]`, entry.message);
+  changed();
 }
 
 export const log = {
@@ -87,9 +97,7 @@ export function getLogs(): readonly LogEntry[] {
 
 export function clearLogs() {
   entries.length = 0;
-  persistSoon();
-  version += 1;
-  listeners.forEach((fn) => fn());
+  changed();
 }
 
 export function getLogVersion(): number {

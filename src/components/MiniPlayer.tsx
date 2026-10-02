@@ -1,19 +1,17 @@
 import { useRef, useState } from 'react';
-import { Pause, Play } from 'lucide-react';
 import { joinArtists } from '@/lib/format';
 import { next, previous, togglePlay } from '@/player/controller';
 import { currentEntry, usePlayer } from '@/player/store';
 import { useArtworkColor, useLivePosition } from '@/ui/hooks';
-import { openPlayer } from '@/ui/overlays';
-import { Artwork } from './Artwork';
+import { openPlayer, useOverlays } from '@/ui/overlays';
+import { TrackArtwork } from './TrackArtwork';
+import { PlayPauseIcon } from './PlayPauseIcon';
 
 /** Trình phát thu nhỏ trên thanh tab: chạm để mở to, vuốt ngang để chuyển bài. */
 export function MiniPlayer() {
   const entry = usePlayer((s) => currentEntry(s));
   const playing = usePlayer((s) => s.playing);
   const buffering = usePlayer((s) => s.buffering);
-  const duration = usePlayer((s) => s.duration);
-  const position = useLivePosition(Boolean(entry));
   const color = useArtworkColor(entry?.track.thumbnail, entry?.track.id);
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -21,7 +19,6 @@ export function MiniPlayer() {
 
   if (!entry) return null;
   const { track } = entry;
-  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
 
   const onPointerDown = (e: React.PointerEvent) => {
     start.current = { x: e.clientX, y: e.clientY, moved: false };
@@ -67,7 +64,7 @@ export function MiniPlayer() {
             setDx(0);
           }}
         >
-          <Artwork src={track.thumbnail} size={40} className="size-10 shrink-0" />
+          <TrackArtwork track={track} size={40} className="size-10 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-[14px] font-semibold leading-tight">{track.title}</div>
             <div className="truncate text-[13px] leading-tight text-white/70">{joinArtists(track.artists)}</div>
@@ -78,18 +75,23 @@ export function MiniPlayer() {
           aria-label={playing ? 'Tạm dừng' : 'Phát'}
           onClick={() => void togglePlay()}
         >
-          {buffering && playing ? (
-            <span className="size-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-          ) : playing ? (
-            <Pause size={24} fill="white" strokeWidth={0} />
-          ) : (
-            <Play size={24} fill="white" strokeWidth={0} />
-          )}
+          <PlayPauseIcon playing={playing} buffering={buffering} size={24} />
         </button>
       </div>
-      <div className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-white/25">
-        <div className="h-full origin-left rounded-full bg-white" style={{ transform: `scaleX(${progress})` }} />
-      </div>
+      <MiniProgress />
+    </div>
+  );
+}
+
+/** Vạch tiến độ dưới mini player: tự cập nhật vị trí, nghỉ khi trình phát lớn đang mở (bị che). */
+function MiniProgress() {
+  const duration = usePlayer((s) => s.duration);
+  const hidden = useOverlays((s) => s.playerOpen);
+  const position = useLivePosition(!hidden);
+  const progress = duration > 0 ? Math.min(1, position / duration) : 0;
+  return (
+    <div className="absolute inset-x-2 bottom-0 h-[2px] rounded-full bg-white/25">
+      <div className="h-full origin-left rounded-full bg-white" style={{ transform: `scaleX(${progress})` }} />
     </div>
   );
 }

@@ -1,24 +1,17 @@
 import { ArrowDownToLine, CircleX, Disc3, Heart, HeartOff, ListEnd, ListMinus, ListPlus, ListStart, Radio, UserRound } from 'lucide-react';
 import { enqueueDownloads, removeDownload, retryDownload, useDownloads } from '@/downloads/manager';
 import { joinArtists } from '@/lib/format';
-import { removeFromPlaylist, toggleLike, useIsLiked } from '@/lib/library';
-import { log } from '@/lib/log';
+import { removeFromPlaylist, useIsLiked } from '@/lib/library';
 import { addToQueue, playNext, playRadio, removeAt } from '@/player/controller';
 import { usePlayer } from '@/player/store';
 import { navigate } from '@/ui/nav';
-import { closePlayer, closeTrackMenu, openPlaylistPicker, toast, useOverlays } from '@/ui/overlays';
-import { Artwork } from './Artwork';
+import { closePlayer, closeTrackMenu, openPlaylistPicker, runAction, toggleLikeWithToast, useOverlays } from '@/ui/overlays';
+import { TrackArtwork } from './TrackArtwork';
 import { Sheet, SheetItem } from './Sheet';
 
-function run(action: () => Promise<unknown> | unknown, done?: string) {
+function run(action: () => unknown, done?: string) {
   closeTrackMenu();
-  Promise.resolve()
-    .then(action)
-    .then(() => done && toast(done))
-    .catch((err) => {
-      log.error('menu', err);
-      toast(err instanceof Error ? err.message : 'Có lỗi xảy ra');
-    });
+  void runAction(action, done);
 }
 
 /** Menu của một bài: Phát tiếp · Thêm vào hàng chờ · Thích · Thêm vào playlist · Radio · Album · Nghệ sĩ. */
@@ -40,7 +33,7 @@ export function TrackMenu() {
       {track && (
         <div className="pb-2">
           <div className="flex items-center gap-3 border-b border-white/10 px-5 pb-4">
-            <Artwork src={track.thumbnail} size={48} className="size-12" />
+            <TrackArtwork track={track} size={48} className="size-12" />
             <div className="min-w-0">
               <div className="truncate text-[15px] font-semibold">{track.title}</div>
               <div className="truncate text-[13px] text-subdued">{joinArtists(track.artists)}</div>
@@ -51,7 +44,10 @@ export function TrackMenu() {
           <SheetItem
             icon={liked ? <HeartOff size={22} /> : <Heart size={22} />}
             label={liked ? 'Bỏ thích' : 'Thích'}
-            onClick={() => run(async () => toast((await toggleLike(track)) ? 'Đã thêm vào Bài hát đã thích' : 'Đã bỏ thích'))}
+            onClick={() => {
+              closeTrackMenu();
+              void toggleLikeWithToast(track);
+            }}
           />
           <SheetItem icon={<ListPlus size={22} />} label="Thêm vào playlist" onClick={() => openPlaylistPicker([track])} />
           {!download && (

@@ -25,6 +25,17 @@ export function formatTotalDuration(totalSeconds: number): string {
   return `${m} phút`;
 }
 
+/** Giờ:phút: "21:05". */
+export function formatClock(ms: number): string {
+  return new Date(ms).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Thời điểm đã qua: "lúc 21:05 hôm nay" / "21:05 30/9/2026". */
+export function formatWhen(ms: number, now = new Date()): string {
+  const date = new Date(ms);
+  return date.toDateString() === now.toDateString() ? `lúc ${formatClock(ms)} hôm nay` : `${formatClock(ms)} ${date.toLocaleDateString('vi-VN')}`;
+}
+
 export function formatBytes(bytes: number): string {
   if (!bytes) return '0 MB';
   const mb = bytes / (1024 * 1024);

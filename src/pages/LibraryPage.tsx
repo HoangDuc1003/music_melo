@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { ChevronRight, Download, Heart, History, Plus, Settings } from 'lucide-react';
 import { Artwork } from '@/components/Artwork';
 import { Page, RootTitle } from '@/components/Page';
+import { PlaylistNameForm } from '@/components/PlaylistNameForm';
 import { Sheet } from '@/components/Sheet';
 import { createPlaylist, useLikedCount, usePlaylists } from '@/lib/library';
 import { navigate, type Route } from '@/ui/nav';
-import { toast } from '@/ui/overlays';
+import { runAction } from '@/ui/overlays';
 
 function Row({ icon, title, subtitle, route }: { icon: React.ReactNode; title: string; subtitle: string; route: Route }) {
   return (
@@ -21,36 +22,17 @@ function Row({ icon, title, subtitle, route }: { icon: React.ReactNode; title: s
 }
 
 function CreatePlaylistSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const [name, setName] = useState('');
-  const submit = async () => {
-    const id = await createPlaylist(name);
-    toast('Đã tạo playlist');
-    setName('');
-    onClose();
-    navigate({ name: 'localPlaylist', id });
-  };
+  const create = (name: string) =>
+    runAction(async () => {
+      const id = await createPlaylist(name);
+      onClose();
+      navigate({ name: 'localPlaylist', id });
+    }, 'Đã tạo playlist');
   return (
     <Sheet open={open} onClose={onClose} label="Tạo playlist">
-      <form
-        className="flex flex-col gap-4 px-5 pb-6"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void submit();
-        }}
-      >
-        <h2 className="text-center text-[17px] font-bold">Đặt tên cho playlist</h2>
-        <input
-          autoFocus={open}
-          maxLength={100}
-          className="rounded-md bg-white/10 px-4 py-3 text-[16px] outline-none focus:bg-white/15"
-          placeholder="Playlist của tôi"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <button type="submit" className="self-center rounded-full bg-accent px-8 py-3 font-bold text-black active:scale-95">
-          Tạo
-        </button>
-      </form>
+      <div className="px-5 pb-6">
+        <PlaylistNameForm title="Đặt tên cho playlist" submitLabel="Tạo" onSubmit={(name) => void create(name)} />
+      </div>
     </Sheet>
   );
 }

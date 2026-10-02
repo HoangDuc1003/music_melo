@@ -1,15 +1,15 @@
 import type { ReactNode } from 'react';
-import { ArrowDown, ArrowDownToLine, Pause, Play, Shuffle } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, Shuffle } from 'lucide-react';
 import { enqueueDownloads, removeDownloads, useDownloads } from '@/downloads/manager';
 import { formatTotalDuration } from '@/lib/format';
-import { pause, play, playTracks } from '@/player/controller';
+import { playTracks } from '@/player/controller';
 import type { PlayContext } from '@/player/queue';
-import { usePlayer } from '@/player/store';
 import { useArtworkColor } from '@/ui/hooks';
-import { toast, type TrackMenuTarget } from '@/ui/overlays';
+import { confirmAction, runAction, toast, type TrackMenuTarget } from '@/ui/overlays';
 import type { Track } from '@/youtube/types';
 import { Artwork } from './Artwork';
 import { Page } from './Page';
+import { PlayContextButton } from './PlayContextButton';
 import { TrackRow } from './TrackRow';
 
 interface Props {
@@ -25,17 +25,12 @@ interface Props {
   numbered?: boolean;
   /** nút thêm ở hàng hành động (lưu, tải…) */
   actions?: ReactNode;
-  headerRight?: ReactNode;
   menuFor?: (index: number) => Omit<TrackMenuTarget, 'track'>;
   empty?: ReactNode;
   /** ẩn nút "Tải tất cả" (trang Đã tải) */
   hideDownload?: boolean;
   /** nội dung thêm giữa hàng nút và danh sách bài */
   children?: ReactNode;
-}
-
-function sameContext(a: PlayContext | undefined, b: PlayContext): boolean {
-  return Boolean(a && a.type === b.type && a.id === b.id && a.title === b.title);
 }
 
 /** Trang danh sách bài: album, playlist, bài đã thích… (phần đầu lớn, nút Phát/Trộn bài, danh sách). */
@@ -49,15 +44,12 @@ export function CollectionView({
   context,
   numbered,
   actions,
-  headerRight,
   menuFor,
   empty,
   hideDownload = false,
   children
 }: Props) {
   const color = useArtworkColor(artwork, title);
-  const isThis = usePlayer((s) => sameContext(s.context, context));
-  const playing = usePlayer((s) => s.playing);
   const total = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
   const downloaded = useDownloads((s) => tracks.filter((t) => s.rows.get(t.id)?.status === 'done').length);
   const pending = useDownloads((s) => tracks.filter((t) => ['queued', 'downloading'].includes(s.rows.get(t.id)?.status ?? '')).length);
@@ -65,22 +57,18 @@ export function CollectionView({
 
   const onDownload = () => {
     if (allDownloaded) {
-      if (window.confirm('Xoá các bài đã tải của danh sách này khỏi máy?')) {
-        void removeDownloads(tracks.map((t) => t.id)).then(() => toast('Đã xoá bản tải'));
-      }
-      return;
+      confirmAction('Xoá các bài đã tải của danh sách này khỏi máy?', () => removeDownloads(tracks.map((t) => t.id)), 'Đã xoá bản tải');
+    } else {
+      void runAction(async () => {
+        const n = await enqueueDownloads(tracks);
+        toast(n ? `Đang tải ${n} bài về máy` : 'Các bài đang được tải');
+      });
     }
-    void enqueueDownloads(tracks).then((n) => toast(n ? `Đang tải ${n} bài về máy` : 'Các bài đang được tải'));
-  };
-
-  const onPlay = () => {
-    if (isThis) return void (playing ? pause() : play());
-    void playTracks(tracks, 0, { context, shuffle: false });
   };
   const onShuffle = () => void playTracks(tracks, Math.floor(Math.random() * tracks.length), { context, shuffle: true });
 
   return (
-    <Page title={title} color={color} right={headerRight}>
+    <Page title={title} color={color}>
       <div className="flex flex-col items-center px-4 pt-2">
         {cover ?? <Artwork src={artwork} eager className="aspect-square w-[62%] max-w-72 shadow-[0_8px_40px_rgba(0,0,0,0.5)]" />}
       </div>
@@ -121,13 +109,7 @@ export function CollectionView({
             <button className="p-2 text-subdued active:scale-90" aria-label="Phát ngẫu nhiên" onClick={onShuffle}>
               <Shuffle size={26} />
             </button>
-            <button
-              className="flex size-14 items-center justify-center rounded-full bg-accent text-black shadow-lg active:scale-95"
-              aria-label={isThis && playing ? 'Tạm dừng' : 'Phát'}
-              onClick={onPlay}
-            >
-              {isThis && playing ? <Pause size={26} fill="black" strokeWidth={0} /> : <Play size={26} fill="black" strokeWidth={0} className="ml-0.5" />}
-            </button>
+            <PlayContextButton tracks={tracks} context={context} />
           </>
         )}
       </div>

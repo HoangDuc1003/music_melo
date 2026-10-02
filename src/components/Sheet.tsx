@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { useSlideIn } from '@/ui/hooks';
 
 interface Props {
   open: boolean;
@@ -14,23 +15,10 @@ const ANIMATION_MS = 260;
 
 /** Bảng trượt từ dưới lên, vuốt xuống để đóng (kiểu iOS). */
 export function Sheet({ open, onClose, children, tall = false, label }: Props) {
-  const [mounted, setMounted] = useState(open);
-  const [shown, setShown] = useState(false);
   const [drag, setDrag] = useState(0);
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ y: number; t: number } | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true);
-      setDrag(0);
-      const frame = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)));
-      return () => cancelAnimationFrame(frame);
-    }
-    setShown(false);
-    const timer = setTimeout(() => setMounted(false), ANIMATION_MS);
-    return () => clearTimeout(timer);
-  }, [open]);
+  const { mounted, shown } = useSlideIn(open, ANIMATION_MS, () => setDrag(0));
 
   if (!mounted) return null;
 

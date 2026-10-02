@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from 'react';
-import { back, useNav } from '@/ui/nav';
+import { back, canGoBack, useNav } from '@/ui/nav';
 
 const DURATION = 220;
 
@@ -20,7 +20,7 @@ interface Drag {
 export function EdgeSwipeBack({ children }: { children: ReactNode }) {
   const root = useRef<HTMLElement>(null);
   const drag = useRef<Drag | null>(null);
-  const canBack = useNav((s) => s.stacks[s.tab].length > 1);
+  const canBack = useNav(canGoBack);
 
   const clear = (...els: (HTMLElement | null | undefined)[]) => {
     for (const el of els) {

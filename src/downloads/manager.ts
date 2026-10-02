@@ -3,14 +3,15 @@
 // Bài đã tải được trình phát dùng thay cho link (nghe offline).
 import { liveQuery } from 'dexie';
 import { create } from 'zustand';
+import { clamp, Semaphore, sleep } from '@/lib/async';
 import { db, getSetting, rememberTracks, setSetting, type DownloadRow } from '@/lib/db';
-import { log } from '@/lib/log';
+import { errorMessage, log } from '@/lib/log';
 import { getLyrics } from '@/lib/lyrics';
 import { isOnline, useNetwork } from '@/lib/network';
 import { refreshLocalFile, setArtworkFileProvider, setFileUrlProvider } from '@/player/controller';
 import { resolveAudio } from '@/youtube/stream';
 import type { Track } from '@/youtube/types';
-import { AdaptiveLimiter, classifyFailure, HARD_MAX, Semaphore } from './concurrency';
+import { AdaptiveLimiter, classifyFailure, HARD_MAX } from './concurrency';
 import { getStorage, SAFE_ID, withRange, type DownloadProgress } from './storage';
 
 const AUTO_LIKED_KEY = 'autoDownloadLiked';
@@ -22,12 +23,16 @@ export const CELLULAR_MAX = 6;
 const RESOLVE_PARALLEL = 3;
 /** Giãn cách giữa hai lần bắt đầu tải. */
 const START_GAP_MS = 150;
+const INITIAL_LIMIT = 3;
 
 export type ConcurrencySetting = 'auto' | number;
 
 export interface DownloadSettings {
   concurrency: ConcurrencySetting;
+  /** cho tải bằng dữ liệu di động */
   cellular: boolean;
+  /** thích bài nào thì tự tải bài đó */
+  autoLiked: boolean;
 }
 
 interface DownloadIndex {
@@ -48,13 +53,18 @@ interface DownloadIndex {
   settings: DownloadSettings;
 }
 
-const DEFAULT_SETTINGS: DownloadSettings = { concurrency: 'auto', cellular: true };
+const DEFAULT_SETTINGS: DownloadSettings = { concurrency: 'auto', cellular: true, autoLiked: false };
+const SETTING_KEYS: Record<keyof DownloadSettings, string> = {
+  concurrency: CONCURRENCY_KEY,
+  cellular: CELLULAR_KEY,
+  autoLiked: AUTO_LIKED_KEY
+};
 
 const initialIndex = (): DownloadIndex => ({
   rows: new Map(),
   progress: new Map(),
   artwork: new Map(),
-  limit: 3,
+  limit: INITIAL_LIMIT,
   speed: 0,
   cooldown: 0,
   waitingForWifi: false,
@@ -63,10 +73,14 @@ const initialIndex = (): DownloadIndex => ({
 
 export const useDownloads = create<DownloadIndex>(initialIndex);
 
+const newLimiter = () => new AdaptiveLimiter({ initial: INITIAL_LIMIT, max: HARD_MAX });
+
 const active = new Set<string>();
 let started = false;
+/** Bảng `rows` trong bộ nhớ đã nạp từ IndexedDB lần đầu. */
+let indexLoaded = false;
 const cleanups: (() => void)[] = [];
-let limiter = new AdaptiveLimiter({ initial: 3, max: HARD_MAX });
+let limiter = newLimiter();
 const resolveGate = new Semaphore(RESOLVE_PARALLEL);
 const lastBytes = new Map<string, number>();
 let lastStartAt = 0;
@@ -111,43 +125,38 @@ function setProgress(id: string, p: DownloadProgress | undefined) {
   else progressTimer ??= setTimeout(flushProgress, PROGRESS_FLUSH_MS);
 }
 
-function errorMessage(err: unknown): string {
-  if (err && typeof err === 'object' && 'message' in err) return String((err as { message: unknown }).message);
-  return String(err);
-}
-
-/** Tải một bài: lấy link → tải file (.part rồi đổi tên) → ảnh bìa → file .json → lời bài hát. */
-async function downloadOne(id: string) {
-  const track = await db.tracks.get(id);
-  if (!track) throw new Error('Thiếu thông tin bài');
-  const storage = getStorage();
-  let attempt = 0;
-  let bytes = 0;
-  let mimeType: string | undefined;
-  for (;;) {
+/** Lấy link rồi tải file nhạc (.part rồi đổi tên); lỗi thì thử lại một lần với link mới. */
+async function downloadAudio(id: string): Promise<{ bytes: number; mimeType?: string }> {
+  for (let attempt = 0; ; attempt++) {
     try {
       // Lần thử lại thì lấy link mới (link cũ có thể đã hết hạn hoặc gắn IP cũ).
       const audio = await resolveGate.run(() => resolveAudio(id, { refresh: attempt > 0 }));
       const { url, headers } = withRange(audio.url, audio.contentLength);
-      mimeType = audio.mimeType;
-      bytes = await storage.saveAudio({
+      const bytes = await getStorage().saveAudio({
         id,
         url,
         headers: { ...audio.headers, ...headers },
         expectedBytes: audio.contentLength,
         onProgress: (p) => setProgress(id, { bytes: p.bytes, total: p.total || audio.contentLength || 0 })
       });
-      break;
+      return { bytes, mimeType: audio.mimeType };
     } catch (err) {
-      attempt += 1;
+      if (attempt >= 1) throw err;
       const kind = classifyFailure(err);
-      if (attempt >= 2) throw err;
       log.warn('download', `${id} lỗi (${kind}), thử lại:`, errorMessage(err));
       limiter.onFailure(kind);
       // Bị YouTube chặn: đợi hết thời gian nghỉ rồi mới thử lại.
       await limiter.waitCooldown();
     }
   }
+}
+
+/** Tải một bài: file nhạc → ảnh bìa → file .json → lời bài hát. */
+async function downloadOne(id: string) {
+  const track = await db.tracks.get(id);
+  if (!track) throw new Error('Thiếu thông tin bài');
+  const storage = getStorage();
+  const { bytes, mimeType } = await downloadAudio(id);
   if (track.thumbnail) await storage.saveArtwork(id, track.thumbnail);
   await storage.saveSidecar(id, { track, downloadedAt: Date.now(), bytes, mimeType });
   await getLyrics(track).catch(() => undefined);
@@ -168,7 +177,7 @@ async function run(id: string) {
       await getStorage().remove(id);
       return;
     }
-    await db.downloads.update(id, { status: 'done', bytes, total: bytes, path: `music/${id}.m4a`, artworkPath: `music/${id}.jpg`, completedAt: Date.now() });
+    await db.downloads.update(id, { status: 'done', bytes, total: bytes, completedAt: Date.now() });
     const art = await getStorage().artworkUrl(id);
     if (art) useDownloads.setState((s) => ({ artwork: new Map(s.artwork).set(id, art) }));
     await refreshLocalFile(id).catch(() => undefined);
@@ -218,12 +227,16 @@ export async function pump() {
 }
 
 function publishStats() {
-  useDownloads.setState({
+  const stats = {
     limit: limiter.limit,
     speed: active.size ? limiter.throughput() : 0,
     cooldown: limiter.cooldownRemaining(),
     waitingForWifi: cellularBlocked()
-  });
+  };
+  // Không đổi gì thì không báo (đỡ chạy lại selector của mọi dòng bài đang hiện).
+  const s = useDownloads.getState();
+  if (s.limit === stats.limit && s.speed === stats.speed && s.cooldown === stats.cooldown && s.waitingForWifi === stats.waitingForWifi) return;
+  useDownloads.setState(stats);
 }
 
 /** Cập nhật tốc độ trên giao diện mỗi giây khi đang tải. */
@@ -247,37 +260,40 @@ function applyLimits() {
   publishStats();
 }
 
+const normalizeConcurrency = (value: unknown): ConcurrencySetting => (typeof value === 'number' ? clamp(value, 1, HARD_MAX) : 'auto');
+
 export async function setDownloadSettings(partial: Partial<DownloadSettings>) {
   const settings = { ...useDownloads.getState().settings, ...partial };
-  if (typeof settings.concurrency === 'number') settings.concurrency = Math.min(HARD_MAX, Math.max(1, Math.round(settings.concurrency)));
+  settings.concurrency = normalizeConcurrency(settings.concurrency);
   useDownloads.setState({ settings });
-  await setSetting(CONCURRENCY_KEY, settings.concurrency);
-  await setSetting(CELLULAR_KEY, settings.cellular);
+  for (const key of Object.keys(partial) as (keyof DownloadSettings)[]) await setSetting(SETTING_KEYS[key], settings[key]);
   applyLimits();
   void pump();
 }
 
 async function loadSettings() {
-  const concurrency = await getSetting<ConcurrencySetting>(CONCURRENCY_KEY, 'auto');
-  const cellular = await getSetting<boolean>(CELLULAR_KEY, true);
-  useDownloads.setState({ settings: { concurrency: concurrency === 'auto' || typeof concurrency === 'number' ? concurrency : 'auto', cellular } });
+  const [concurrency, cellular, autoLiked] = await Promise.all([
+    getSetting<unknown>(CONCURRENCY_KEY, DEFAULT_SETTINGS.concurrency),
+    getSetting(CELLULAR_KEY, DEFAULT_SETTINGS.cellular),
+    getSetting(AUTO_LIKED_KEY, DEFAULT_SETTINGS.autoLiked)
+  ]);
+  useDownloads.setState({ settings: { concurrency: normalizeConcurrency(concurrency), cellular, autoLiked } });
   applyLimits();
 }
 
 /** Thêm bài vào hàng đợi tải; bỏ qua bài đã tải/đang tải. Trả về số bài mới thêm. */
 export async function enqueueDownloads(tracks: Track[]): Promise<number> {
-  const valid = tracks.filter((t) => SAFE_ID.test(t.id));
+  const valid = [...new Map(tracks.filter((t) => SAFE_ID.test(t.id)).map((t) => [t.id, t])).values()];
   if (!valid.length) return 0;
   await rememberTracks(valid);
   const now = Date.now();
-  let added = 0;
-  await db.transaction('rw', db.downloads, async () => {
-    for (const [i, track] of valid.entries()) {
-      const row = await db.downloads.get(track.id);
-      if (row && row.status !== 'error') continue;
-      await db.downloads.put({ id: track.id, status: 'queued', bytes: 0, total: 0, createdAt: now + i });
-      added += 1;
-    }
+  const added = await db.transaction('rw', db.downloads, async () => {
+    const existing = await db.downloads.bulkGet(valid.map((t) => t.id));
+    const rows = valid
+      .map((track, i) => ({ id: track.id, status: 'queued' as const, bytes: 0, total: 0, createdAt: now + i }))
+      .filter((_, i) => !existing[i] || existing[i].status === 'error');
+    await db.downloads.bulkPut(rows);
+    return rows.length;
   });
   void pump();
   return added;
@@ -288,19 +304,25 @@ export async function retryDownload(id: string) {
   void pump();
 }
 
-export async function removeDownload(id: string) {
-  await db.downloads.delete(id);
-  if (!active.has(id)) await getStorage().remove(id).catch((err) => log.warn('download', err));
+export const removeDownload = (id: string) => removeDownloads([id]);
+
+/** Xoá khỏi danh sách tải và xoá file (bài đang tải dở thì `run` tự xoá file khi xong). */
+export async function removeDownloads(ids: string[]) {
+  await db.downloads.bulkDelete(ids);
   useDownloads.setState((s) => {
     const artwork = new Map(s.artwork);
-    artwork.delete(id);
+    for (const id of ids) artwork.delete(id);
     return { artwork };
   });
-  await refreshLocalFile(id).catch(() => undefined);
-}
-
-export async function removeDownloads(ids: string[]) {
-  for (const id of ids) await removeDownload(id);
+  const files = new Semaphore(4);
+  await Promise.all(
+    ids.map((id) =>
+      files.run(async () => {
+        if (!active.has(id)) await getStorage().remove(id).catch((err) => log.warn('download', err));
+        await refreshLocalFile(id).catch(() => undefined);
+      })
+    )
+  );
 }
 
 export async function removeAllDownloads() {
@@ -308,21 +330,35 @@ export async function removeAllDownloads() {
   await removeDownloads(ids);
 }
 
+async function isDownloaded(id: string): Promise<boolean> {
+  const row = useDownloads.getState().rows.get(id);
+  if (row?.status === 'done') return true;
+  if (!row && indexLoaded) return false;
+  // Bảng trong bộ nhớ chưa nạp (lúc mở app) hoặc trễ một nhịp sau khi ghi: hỏi IndexedDB.
+  return (await db.downloads.get(id))?.status === 'done';
+}
+
 /** Link file cho trình phát nếu bài đã tải xong. */
 export async function localFileUrl(id: string): Promise<string | undefined> {
-  const row = useDownloads.getState().rows.get(id) ?? (await db.downloads.get(id));
-  if (row?.status !== 'done') return undefined;
-  return getStorage().audioUrl(id);
+  return (await isDownloaded(id)) ? getStorage().audioUrl(id) : undefined;
 }
 
-/** Ảnh bìa đã lưu (dùng khi ảnh trên mạng không tải được). */
-export function localArtwork(id: string): string | undefined {
-  return useDownloads.getState().artwork.get(id);
+async function localArtworkFile(id: string): Promise<string | undefined> {
+  return (await isDownloaded(id)) ? getStorage().artworkFileUrl(id) : undefined;
 }
 
-export async function localArtworkFile(id: string): Promise<string | undefined> {
-  const row = useDownloads.getState().rows.get(id);
-  return row?.status === 'done' ? getStorage().artworkFileUrl(id) : undefined;
+/**
+ * Cho trình phát dùng file đã tải. Gọi trước `initPlayer` để cả hàng chờ khôi phục lúc mở app
+ * cũng phát từ file (không tốn mạng, nghe được offline).
+ */
+export function connectDownloadsToPlayer() {
+  setFileUrlProvider(localFileUrl);
+  setArtworkFileProvider(localArtworkFile);
+}
+
+/** Phần đã tải 0..1 (0 khi chưa biết dung lượng). */
+export function progressRatio(p: DownloadProgress | undefined): number {
+  return p && p.total > 0 ? Math.min(1, p.bytes / p.total) : 0;
 }
 
 export function totalDownloadedBytes(rows: Iterable<DownloadRow>): number {
@@ -331,19 +367,15 @@ export function totalDownloadedBytes(rows: Iterable<DownloadRow>): number {
   return total;
 }
 
-export const getAutoDownloadLiked = () => getSetting(AUTO_LIKED_KEY, false);
-export const setAutoDownloadLiked = (value: boolean) => setSetting(AUTO_LIKED_KEY, value);
-
 /** Dữ liệu app bị mất nhưng file còn: dựng lại danh sách bài đã tải từ các file .json. */
 async function reconcile() {
   try {
-    const sidecars = await getStorage().listSidecars();
     const known = new Set((await db.downloads.toCollection().primaryKeys()) as string[]);
-    const missing = sidecars.filter((s) => !known.has(s.track.id));
+    const missing = await getStorage().listSidecars(known);
     if (!missing.length) return;
     await rememberTracks(missing.map((s) => s.track));
     await db.downloads.bulkPut(
-      missing.map((s) => ({ id: s.track.id, status: 'done' as const, bytes: s.bytes, total: s.bytes, path: `music/${s.track.id}.m4a`, createdAt: s.downloadedAt, completedAt: s.downloadedAt }))
+      missing.map((s) => ({ id: s.track.id, status: 'done' as const, bytes: s.bytes, total: s.bytes, createdAt: s.downloadedAt, completedAt: s.downloadedAt }))
     );
     log.info('download', `khôi phục ${missing.length} bài đã tải từ file .json`);
   } catch (err) {
@@ -362,42 +394,50 @@ async function loadArtwork(rows: DownloadRow[]) {
   useDownloads.setState({ artwork });
 }
 
+/** Thích một bài → tự tải (nếu bật trong Cài đặt). */
+function watchLikes(): () => void {
+  const onLike = (id: unknown) => {
+    if (!useDownloads.getState().settings.autoLiked) return;
+    // Chạy sau khi giao dịch "thích" ghi xong.
+    setTimeout(async () => {
+      const track = await db.tracks.get(id as string);
+      if (track) await enqueueDownloads([track]).catch((err) => log.warn('download', err));
+    }, 0);
+  };
+  db.likes.hook('creating', onLike);
+  return () => db.likes.hook('creating').unsubscribe(onLike);
+}
+
+/** Có mạng lại / đổi Wi‑Fi ↔ 4G: áp lại giới hạn và tải tiếp. */
+function watchNetwork(): () => void {
+  return useNetwork.subscribe((state, prev) => {
+    if (state.connectionType !== prev.connectionType) applyLimits();
+    if (state.online && (!prev.online || state.connectionType !== prev.connectionType)) void pump();
+  });
+}
+
+/** Bảng trạng thái tải trong bộ nhớ, luôn khớp IndexedDB. */
+function watchRows(): () => void {
+  const subscription = liveQuery(() => db.downloads.toArray()).subscribe({
+    next: (rows) => {
+      indexLoaded = true;
+      useDownloads.setState({ rows: new Map(rows.map((r) => [r.id, r])) });
+    },
+    error: (err) => log.error('download', err)
+  });
+  return () => subscription.unsubscribe();
+}
+
 /** Gọi một lần khi app khởi động (sau initPlayer). */
 export async function initDownloads() {
   if (started) return;
   started = true;
-  setFileUrlProvider(localFileUrl);
-  setArtworkFileProvider(localArtworkFile);
   await loadSettings();
   await reconcile();
   // Lần trước tắt app giữa chừng: tải lại từ đầu các bài đang dở.
   await db.downloads.where('status').equals('downloading').modify({ status: 'queued' });
-  const subscription = liveQuery(() => db.downloads.toArray()).subscribe({
-    next: (rows) => useDownloads.setState({ rows: new Map(rows.map((r) => [r.id, r])) }),
-    error: (err) => log.error('download', err)
-  });
-  cleanups.push(() => subscription.unsubscribe());
+  cleanups.push(watchRows(), watchLikes(), watchNetwork());
   void loadArtwork(await db.downloads.toArray());
-  // Thích một bài → tự tải (nếu bật trong Cài đặt).
-  const onLike = (id: unknown) => {
-    // Chạy sau khi giao dịch "thích" ghi xong.
-    setTimeout(() => {
-      void getAutoDownloadLiked().then(async (on) => {
-        if (!on) return;
-        const track = await db.tracks.get(id as string);
-        if (track) await enqueueDownloads([track]);
-      });
-    }, 0);
-  };
-  db.likes.hook('creating', onLike);
-  cleanups.push(() => db.likes.hook('creating').unsubscribe(onLike));
-  // Có mạng lại / đổi Wi‑Fi ↔ 4G: áp lại giới hạn và tải tiếp.
-  cleanups.push(
-    useNetwork.subscribe((state, prev) => {
-      if (state.connectionType !== prev.connectionType) applyLimits();
-      if (state.online && (!prev.online || state.connectionType !== prev.connectionType)) void pump();
-    })
-  );
   void pump();
 }
 
@@ -406,6 +446,7 @@ export function __resetDownloadsForTests(options: { limiter?: AdaptiveLimiter; s
   active.clear();
   lastBytes.clear();
   started = false;
+  indexLoaded = false;
   cleanups.splice(0).forEach((fn) => fn());
   clearTimeout(pumpTimer);
   pumpTimer = undefined;
@@ -416,7 +457,7 @@ export function __resetDownloadsForTests(options: { limiter?: AdaptiveLimiter; s
   pendingProgress.clear();
   lastStartAt = 0;
   startGapMs = options.startGapMs ?? 0;
-  limiter = options.limiter ?? new AdaptiveLimiter({ initial: 3, max: HARD_MAX });
+  limiter = options.limiter ?? newLimiter();
   useDownloads.setState(initialIndex(), true);
 }
 
@@ -426,6 +467,6 @@ export function activeCountForTests(): number {
 
 export async function waitForIdleForTests() {
   for (let i = 0; i < 1000 && (active.size > 0 || (await db.downloads.where('status').equals('queued').count()) > 0); i++) {
-    await new Promise((resolve) => setTimeout(resolve, 5));
+    await sleep(5);
   }
 }

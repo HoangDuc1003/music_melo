@@ -1,10 +1,11 @@
 import { playTracks } from '@/player/controller';
-import type { Shelf as ShelfData, Track } from '@/youtube/types';
+import { tracksOf } from '@/youtube/normalize';
+import type { Shelf as ShelfData } from '@/youtube/types';
 import { MediaCard, TrackCard } from './MediaCard';
 
 /** Một hàng gợi ý cuộn ngang (trang chủ, nghệ sĩ). */
 export function Shelf({ shelf }: { shelf: ShelfData }) {
-  const tracks: Track[] = shelf.items.flatMap((item) => (item.type === 'track' ? [item.track] : []));
+  const tracks = tracksOf(shelf.items);
   if (!shelf.items.length) return null;
   return (
     <section className="mt-7">

@@ -194,4 +194,12 @@ describe('nhập từ file dữ liệu Spotify', () => {
     expect((await spotifyRows()).map((r) => r.spotifyId).sort()).toEqual(['export:Nhạc đi tàu', 'export:liked', 'liked', 'p1']);
     await expect(importSpotifyExport([file('rong.json', '{}')])).rejects.toThrow(/Không thấy playlist/);
   });
+
+  it('nhập file đúng lúc đang đồng bộ: hai việc chạy lần lượt, không ghi chồng nhau', async () => {
+    const file = { name: 'Playlist1.json', text: async () => playlistJson };
+    const [, message] = await Promise.all([syncSpotify(), importSpotifyExport([file])]);
+    expect(message).toMatch(/^Đã nhập 1 playlist/);
+    expect(useSpotify.getState()).toMatchObject({ syncing: false, error: undefined });
+    expect((await spotifyRows()).map((r) => r.spotifyId).sort()).toEqual(['export:Nhạc đi tàu', 'liked', 'p1']);
+  });
 });

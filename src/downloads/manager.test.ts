@@ -20,6 +20,7 @@ import { db } from '@/lib/db';
 import { setNetworkStatus } from '@/lib/network';
 import {
   __resetDownloadsForTests,
+  connectDownloadsToPlayer,
   enqueueDownloads,
   initDownloads,
   activeCountForTests,
@@ -88,8 +89,8 @@ class FakeStorage implements DownloadStorage {
   async artworkFileUrl(id: string) {
     return this.artwork.has(id) ? `file:///music/${id}.jpg` : undefined;
   }
-  async listSidecars() {
-    return [...this.sidecars.values()];
+  async listSidecars(known: ReadonlySet<string>) {
+    return [...this.sidecars.values()].filter((s) => !known.has(s.track.id));
   }
 }
 
@@ -307,6 +308,18 @@ describe('tải song song tự điều chỉnh', () => {
 });
 
 describe('khởi động', () => {
+  it('nối với trình phát trước khi nạp danh sách tải: hàng chờ khôi phục vẫn phát từ file', async () => {
+    await db.downloads.put({ id: track(2).id, status: 'done', bytes: 1000, total: 1000, createdAt: 1 });
+    storage.files.set(track(2).id, 1000);
+    storage.artwork.add(track(2).id);
+    connectDownloadsToPlayer();
+    const [fileUrl] = mocks.setFileUrlProvider.mock.lastCall as unknown as [(id: string) => Promise<string | undefined>];
+    const [artworkFile] = mocks.setArtworkFileProvider.mock.lastCall as unknown as [(id: string) => Promise<string | undefined>];
+    expect(await fileUrl(track(2).id)).toBe(`file:///music/${track(2).id}.m4a`);
+    expect(await artworkFile(track(2).id)).toBe(`file:///music/${track(2).id}.jpg`);
+    expect(await fileUrl(track(3).id)).toBeUndefined();
+  });
+
   it('tải tiếp bài đang dở và dựng lại danh sách từ file .json', async () => {
     await db.tracks.put(track(1));
     await db.downloads.put({ id: track(1).id, status: 'downloading', bytes: 0, total: 0, createdAt: 1 });
@@ -316,7 +329,6 @@ describe('khởi động', () => {
     await initDownloads();
     await waitForIdleForTests();
 
-    expect(mocks.setFileUrlProvider).toHaveBeenCalled();
     expect((await db.downloads.get(track(1).id))?.status).toBe('done');
     expect(await db.downloads.get(track(7).id)).toMatchObject({ status: 'done', bytes: 1234 });
     expect(await db.tracks.get(track(7).id)).toMatchObject({ title: 'Bài 7' });
@@ -324,10 +336,9 @@ describe('khởi động', () => {
   });
 
   it('thích bài thì tự tải nếu bật', async () => {
-    const { setAutoDownloadLiked } = await import('./manager');
     const { toggleLike } = await import('@/lib/library');
     await initDownloads();
-    await setAutoDownloadLiked(true);
+    await setDownloadSettings({ autoLiked: true });
     await toggleLike(track(3));
     let status: string | undefined;
     await waitUntil(() => {

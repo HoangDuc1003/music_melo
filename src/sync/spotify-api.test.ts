@@ -1,23 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const http = vi.hoisted(() => ({ appFetch: vi.fn() }));
+// Không đợi thật khi Spotify bảo thử lại sau: chỉ ghi lại thời gian chờ.
+const sleeps = vi.hoisted(() => [] as number[]);
+vi.mock('@/lib/async', async (original) => ({ ...(await original<object>()), sleep: async (ms: number) => void sleeps.push(ms) }));
 const auth = vi.hoisted(() => ({ getAccessToken: vi.fn(async (force?: boolean) => (force ? 'NEW' : 'OLD')) }));
 vi.mock('@/youtube/http', () => ({ appFetch: http.appFetch }));
 vi.mock('./spotify-auth', () => auth);
 
-import { __setSpotifySleepForTests, getMe, getPlaylists, getPlaylistTracks, getSavedTracks, SpotifyApiError, toSourceTrack } from './spotify-api';
+import { getMe, getPlaylists, getPlaylistTracks, getSavedTracks, SpotifyApiError, toSourceTrack } from './spotify-api';
 
 const API = 'https://api.spotify.com/v1';
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
 const track = (id: string, extra: object = {}) => ({ id, type: 'track', name: `Bài ${id}`, duration_ms: 200_000, artists: [{ name: 'Ca sĩ' }], album: { name: 'Album' }, ...extra });
-const sleeps: number[] = [];
 
 beforeEach(() => {
   http.appFetch.mockReset();
   auth.getAccessToken.mockClear();
   sleeps.length = 0;
-  __setSpotifySleepForTests(async (ms) => void sleeps.push(ms));
 });
 
 describe('gọi API', () => {

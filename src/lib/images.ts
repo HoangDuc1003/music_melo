@@ -8,16 +8,22 @@ export function bucket(px: number): number {
   return BUCKETS.find((b) => b >= px) ?? BUCKETS[BUCKETS.length - 1];
 }
 
+/** Ảnh googleusercontent/ggpht đổi kích thước bằng hậu tố "=w120-h120-…"; ảnh nơi khác giữ nguyên. */
+export function resizeGoogleImage(url: string, size: number): string {
+  try {
+    if (!RESIZABLE.test(new URL(url).hostname)) return url;
+  } catch {
+    return url;
+  }
+  return `${url.replace(/=(w\d+-h\d+|s\d+)[^/]*$/, '')}=w${size}-h${size}-l90-rj`;
+}
+
 /** Đổi link ảnh sang kích thước gần nhất ≥ `px` điểm ảnh thật (đã nhân mật độ màn hình). */
 export function sizedImage(url: string | undefined, px: number): string | undefined {
   if (!url || !/^https:\/\//.test(url)) return url;
   try {
     const parsed = new URL(url);
-    if (RESIZABLE.test(parsed.hostname)) {
-      const size = bucket(px);
-      const base = url.replace(/=(w\d+-h\d+|s\d+)[^/]*$/, '');
-      return `${base}=w${size}-h${size}-l90-rj`;
-    }
+    if (RESIZABLE.test(parsed.hostname)) return resizeGoogleImage(url, bucket(px));
     if (YTIMG.test(parsed.hostname)) {
       const name = px <= 320 ? 'mqdefault' : 'hqdefault';
       return url.replace(/\/(default|mqdefault|hqdefault|sddefault|maxresdefault)(\.jpg|\.webp)/, `/${name}$2`);

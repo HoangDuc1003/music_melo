@@ -5,6 +5,7 @@ import {
   addToPlaylist,
   clearSearches,
   createPlaylist,
+  DEFAULT_PLAYLIST_NAME,
   deletePlaylist,
   isLiked,
   likedTracks,
@@ -58,7 +59,7 @@ describe('playlist', () => {
 
   it('tên rỗng thì đặt tên mặc định', async () => {
     const id = await createPlaylist('');
-    expect((await playlistWithTracks(id))?.playlist.name).toBe('Playlist mới');
+    expect((await playlistWithTracks(id))?.playlist.name).toBe(DEFAULT_PLAYLIST_NAME);
   });
 });
 

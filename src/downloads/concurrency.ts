@@ -4,6 +4,8 @@
 // - YouTube chặn (403/429) → giảm một nửa (nhân) và tạm nghỉ, nghỉ lâu dần nếu bị chặn liên tiếp.
 // Logic thuần (đồng hồ tiêm vào) để test chính xác.
 
+import { clamp, sleep } from '@/lib/async';
+
 export type FailureKind = 'blocked' | 'network' | 'other';
 
 export interface LimiterOptions {
@@ -77,7 +79,7 @@ export class AdaptiveLimiter {
   /** Đợi hết thời gian nghỉ (kiểm tra lại theo đồng hồ của bộ điều chỉnh mỗi `pollMs`). */
   async waitCooldown(pollMs = 250): Promise<void> {
     for (let remaining = this.cooldownRemaining(); remaining > 0; remaining = this.cooldownRemaining()) {
-      await new Promise((resolve) => setTimeout(resolve, Math.min(remaining, pollMs)));
+      await sleep(Math.min(remaining, pollMs));
     }
   }
 
@@ -147,27 +149,4 @@ export function classifyFailure(err: unknown): FailureKind {
   if (status === 403 || status === 429 || reason === 'blocked' || /\b(403|429)\b/.test(message)) return 'blocked';
   if (reason === 'network' || /network|timed? ?out|offline|connection|internet|kết nối|mạng/i.test(message)) return 'network';
   return 'other';
-}
-
-/** Giới hạn số việc chạy song song (ví dụ số lần hỏi link YouTube cùng lúc). */
-export class Semaphore {
-  private waiting: (() => void)[] = [];
-  private running = 0;
-
-  constructor(private readonly size: number) {}
-
-  async run<T>(task: () => Promise<T>): Promise<T> {
-    if (this.running >= this.size) await new Promise<void>((resolve) => this.waiting.push(resolve));
-    this.running += 1;
-    try {
-      return await task();
-    } finally {
-      this.running -= 1;
-      this.waiting.shift()?.();
-    }
-  }
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(Math.round(value), min), max);
 }

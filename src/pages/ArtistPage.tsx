@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Pause, Play, Radio } from 'lucide-react';
+import { Radio } from 'lucide-react';
 import { Artwork } from '@/components/Artwork';
-import { ErrorState, Page, Spinner } from '@/components/Page';
+import { Page, PageError, PageLoading } from '@/components/Page';
+import { PlayContextButton } from '@/components/PlayContextButton';
 import { Shelf } from '@/components/Shelf';
 import { TrackRow } from '@/components/TrackRow';
-import { pause, play, playRadio, playTracks } from '@/player/controller';
-import { usePlayer } from '@/player/store';
+import { playRadio, playTracks } from '@/player/controller';
 import { useArtworkColor } from '@/ui/hooks';
 import { getArtist } from '@/youtube/music';
 
@@ -14,23 +14,9 @@ export function ArtistPage({ id }: { id: string }) {
   const query = useQuery({ queryKey: ['artist', id], queryFn: () => getArtist(id) });
   const color = useArtworkColor(query.data?.thumbnail, id);
   const [showAll, setShowAll] = useState(false);
-  const isThis = usePlayer((s) => s.context?.type === 'artist' && s.context.id === id);
-  const playing = usePlayer((s) => s.playing);
 
-  if (query.isPending) {
-    return (
-      <Page>
-        <Spinner className="mt-40" />
-      </Page>
-    );
-  }
-  if (query.isError) {
-    return (
-      <Page solidHeader>
-        <ErrorState error={new Error('Không tải được nghệ sĩ. Kiểm tra kết nối mạng.')} onRetry={() => void query.refetch()} />
-      </Page>
-    );
-  }
+  if (query.isPending) return <PageLoading />;
+  if (query.isError) return <PageError message="Không tải được nghệ sĩ. Kiểm tra kết nối mạng." onRetry={() => void query.refetch()} />;
   const artist = query.data;
   const context = { type: 'artist' as const, id, title: artist.name };
   const top = showAll ? artist.topTracks : artist.topTracks.slice(0, 5);
@@ -52,13 +38,7 @@ export function ArtistPage({ id }: { id: string }) {
         </button>
         <div className="flex-1" />
         {artist.topTracks.length > 0 && (
-          <button
-            className="flex size-14 items-center justify-center rounded-full bg-accent text-black shadow-lg active:scale-95"
-            aria-label={isThis && playing ? 'Tạm dừng' : 'Phát'}
-            onClick={() => (isThis ? void (playing ? pause() : play()) : void playTracks(artist.topTracks, 0, { context, shuffle: false }))}
-          >
-            {isThis && playing ? <Pause size={26} fill="black" strokeWidth={0} /> : <Play size={26} fill="black" strokeWidth={0} className="ml-0.5" />}
-          </button>
+          <PlayContextButton tracks={artist.topTracks} context={context} />
         )}
       </div>
 

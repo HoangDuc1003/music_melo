@@ -87,7 +87,3 @@ export function canGoBack(state: NavState = useNav.getState()): boolean {
   return state.stacks[state.tab].length > 1;
 }
 
-/** Chỉ dùng trong test. */
-export function __resetNavForTests() {
-  useNav.setState({ tab: 'home', stacks: roots(), rootTap: 0 }, true);
-}

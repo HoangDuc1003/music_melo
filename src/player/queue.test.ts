@@ -2,12 +2,17 @@ import { describe, expect, it } from 'vitest';
 import type { Track } from '@/youtube/types';
 import {
   freshRadioTracks,
+  indexAfterInsert,
+  indexAfterMove,
+  indexAfterRemove,
+  insertIntoOriginalOrder,
   insertPosition,
   makeEntries,
   parseSnapshot,
   serializeSnapshot,
   shouldAppendRadio,
   shuffleKeepingCurrent,
+  unshuffle,
   upcomingIndices,
   type QueueEntry
 } from './queue';
@@ -57,6 +62,51 @@ describe('insertPosition', () => {
     expect(insertPosition(entries, 0, 'queue')).toBe(1);
     expect(insertPosition(entries, 4, 'queue')).toBe(5);
     expect(insertPosition(entries, 6, 'queue')).toBe(7);
+  });
+
+  it('radio: cuối hàng chờ', () => {
+    expect(insertPosition(entries, 1, 'radio')).toBe(entries.length);
+  });
+
+  it('đang trộn bài: chèn vào thứ tự gốc theo cùng quy tắc', () => {
+    const [a, b, c] = makeEntries(tracks('a', 'b', 'c'));
+    const [q] = makeEntries(tracks('q'), 'queue');
+    const [n] = makeEntries(tracks('n'), 'queue');
+    // Hàng chờ đã trộn: c, a, b (đang phát c); thứ tự gốc a, b, c, q (q đã thêm sau c).
+    const order = [a.uid, b.uid, c.uid, q.uid];
+    const shuffled = [c, a, b, q];
+    expect(insertIntoOriginalOrder(order, shuffled, c.uid, [n], 'next')).toEqual([a.uid, b.uid, c.uid, n.uid, q.uid]);
+    expect(insertIntoOriginalOrder(order, shuffled, c.uid, [n], 'queue')).toEqual([a.uid, b.uid, c.uid, q.uid, n.uid]);
+    expect(insertIntoOriginalOrder(order, shuffled, a.uid, [n], 'radio')).toEqual([...order, n.uid]);
+    expect(insertIntoOriginalOrder(order, shuffled, undefined, [n], 'next')).toEqual([...order, n.uid]);
+  });
+});
+
+describe('chỉ số bài đang phát sau khi đổi hàng chờ', () => {
+  it('chèn', () => {
+    expect(indexAfterInsert(2, 1, 3)).toBe(5);
+    expect(indexAfterInsert(2, 2, 1)).toBe(3);
+    expect(indexAfterInsert(2, 3, 1)).toBe(2);
+    expect(indexAfterInsert(-1, 0, 2)).toBe(-1);
+  });
+
+  it('xoá', () => {
+    expect(indexAfterRemove(3, 1, 4)).toBe(2);
+    expect(indexAfterRemove(1, 3, 4)).toBe(1);
+    expect(indexAfterRemove(2, 2, 4)).toBe(2);
+    expect(indexAfterRemove(4, 4, 4)).toBe(3);
+  });
+
+  it('kéo thả', () => {
+    expect(indexAfterMove(2, 2, 5)).toBe(5);
+    expect(indexAfterMove(2, 0, 3)).toBe(1);
+    expect(indexAfterMove(2, 4, 1)).toBe(3);
+    expect(indexAfterMove(2, 3, 5)).toBe(2);
+  });
+
+  it('tắt trộn bài: về thứ tự gốc, bài thiếu trong thứ tự gốc để cuối', () => {
+    const [a, b, c, x] = makeEntries(tracks('a', 'b', 'c', 'x'));
+    expect(unshuffle([c, x, a, b], [a.uid, b.uid, c.uid])).toEqual([a, b, c, x]);
   });
 });
 

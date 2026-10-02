@@ -1,10 +1,11 @@
 // Tìm bài Spotify tương ứng trên YouTube Music: so tên bài, nghệ sĩ, thời lượng.
 // Kết quả lưu vào db.spotifyMatches để lần đồng bộ sau không phải tìm lại.
-import { Semaphore } from '@/downloads/concurrency';
+import { Semaphore } from '@/lib/async';
 import { db, rememberTracks } from '@/lib/db';
 import { log } from '@/lib/log';
-import { cleanArtist, cleanTitle } from '@/lib/lyrics';
+import { cleanArtist, cleanTitle, fold } from '@/lib/text';
 import { search } from '@/youtube/music';
+import { tracksOf } from '@/youtube/normalize';
 import type { Track } from '@/youtube/types';
 import type { SourceTrack } from './spotify-api';
 
@@ -14,17 +15,6 @@ const MISS_RETRY_MS = 7 * 24 * 3600_000;
 const MATCH_PARALLEL = 2;
 const MIN_SCORE = 0.7;
 const MIN_ARTIST = 0.4;
-
-/** Chữ thường, bỏ dấu, bỏ ký tự đặc biệt: "Sơn Tùng M-TP" → "son tung m tp". */
-export function fold(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/\p{Diacritic}/gu, '')
-    .replace(/đ/gi, 'd')
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .trim();
-}
 
 /** Bỏ phần phụ trong tên bài Spotify: "(feat. X)", "(with X)", " - Remastered 2011", " - Live". */
 export function cleanSpotifyTitle(title: string): string {
@@ -42,8 +32,9 @@ export function similarity(a: string, b: string): number {
   if (!A || !B) return 0;
   if (A === B) return 1;
   const ta = A.split(' ');
+  const tb = B.split(' ');
   const pool = new Map<string, number>();
-  for (const t of B.split(' ')) pool.set(t, (pool.get(t) ?? 0) + 1);
+  for (const t of tb) pool.set(t, (pool.get(t) ?? 0) + 1);
   let common = 0;
   for (const t of ta) {
     const left = pool.get(t) ?? 0;
@@ -52,7 +43,7 @@ export function similarity(a: string, b: string): number {
       pool.set(t, left - 1);
     }
   }
-  const dice = (2 * common) / (ta.length + B.split(' ').length);
+  const dice = (2 * common) / (ta.length + tb.length);
   const contained = ` ${B} `.includes(` ${A} `) || ` ${A} `.includes(` ${B} `);
   return contained ? Math.max(dice, 0.9) : dice;
 }
@@ -64,7 +55,7 @@ export interface MatchScore {
 }
 
 /** Điểm của một kết quả YouTube cho bài Spotify `src`. */
-export function scoreCandidate(src: SourceTrack, cand: Track): MatchScore {
+function scoreCandidate(src: SourceTrack, cand: Track): MatchScore {
   const title = similarity(cleanSpotifyTitle(src.title), cleanTitle(cand.title));
   const candArtists = cand.artists.map((a) => cleanArtist(a.name));
   let artist = src.artists.length ? 0 : 0.5;
@@ -92,16 +83,11 @@ export function pickBest(src: SourceTrack, candidates: Track[]): Track | undefin
   return best.track;
 }
 
-function tracksOf(items: Awaited<ReturnType<typeof search>>): Track[] {
-  return items.flatMap((item) => (item.type === 'track' ? [item.track] : [])).slice(0, 8);
-}
-
 /** Tìm bài hát trước, không thấy thì tìm trong video (bài chỉ có MV). */
 export async function findOnYouTube(src: SourceTrack): Promise<Track | undefined> {
   const query = `${cleanSpotifyTitle(src.title)} ${src.artists[0] ?? ''}`.trim();
-  const song = pickBest(src, tracksOf(await search(query, 'song')));
-  if (song) return song;
-  return pickBest(src, tracksOf(await search(query, 'video')));
+  const top = async (type: 'song' | 'video') => tracksOf(await search(query, type)).slice(0, 8);
+  return pickBest(src, await top('song')) ?? pickBest(src, await top('video'));
 }
 
 export interface MatchOptions {

@@ -18,8 +18,8 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
 - `appId` `com.melo.music` must never change (downloads live in the app container).
 - Repo `HoangDuc1003/spoti_music` is **public**: never commit secrets.
 
-## Status (2026-10-01, session 2 — 10 closed loops done, CI green each round)
-Done and verified (85 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
+## Status (2026-10-02, session 2 — 10 closed loops + Spotify sync + refactor pass, CI green each round)
+Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
 - **Swift plugin** `plugins/player/` (package `CapacitorMeloPlayer`):
   - `ios/Sources/MeloPlayerCore/` — pure Swift: `PlayerQueue`, `QueueItem`/`PlaybackSource` (file first, remote
     **https only**), `artworkURL` (https/file only), `RetryPolicy` (needsUrl once → error+skip; stop after skipping the
@@ -45,12 +45,16 @@ Done and verified (85 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright s
 - **Player controller** `src/player/` (`queue.ts` pure helpers, `store.ts` Zustand, `controller.ts`): pre-resolve 20
   ahead, `needsUrl`, radio when ≤3 left (not when offline/repeat), Spotify-like *Play next* / *Add to queue* (after
   current + earlier queued items), shuffle keeps current, snapshot restore, history, network change → re-resolve,
-  offline → only downloaded tracks, `setFileUrlProvider`/`setArtworkFileProvider` hooks. Test uses a fake native that
+  offline → only downloaded tracks, `setFileUrlProvider`/`setArtworkFileProvider` hooks (wired by
+  `connectDownloadsToPlayer()` in main.tsx **before** `initPlayer`, so a restored queue already plays downloaded files).
+  Index math after insert/remove/move/unshuffle lives in `queue.ts` (pure, tested). Test uses a fake native that
   asserts the JS mirror equals the native queue. **Every queue mutation runs through `exclusive()`** (promise-chain
   lock): rapid taps can't desync JS ↔ native; insert positions are computed from fresh state after the `toItems` await;
   `removeAt`/`move` take the entry `uid` to re-find a row whose index went stale; a late radio fetch only appends if
   the queue's last uid is still the seed. Never `await` a locked public function from inside the lock (deadlock) — use
-  the `*Locked` internals. History is pruned to 2000 rows on launch (`pruneHistory`).
+  the `*Locked` internals. Concurrent radio requests share one in-flight promise (queue end waits for it). Network
+  state lives in `lib/network.ts` (`initNetwork()` first in main.tsx); the controller subscribes to `useNetwork` and
+  re-resolves links when the connection type changes. History is pruned to 2000 rows on launch (`pruneHistory`).
 - **UI** (`src/App.tsx`, `components/`, `pages/`, `ui/`): per-tab nav stacks (`ui/nav.ts`, pages kept mounted with
   `hidden`), iOS edge-swipe back (`EdgeSwipeBack`, 12px strip), slide-in pages, mini player (swipe to skip), full
   player (drag down to close, artwork colour), queue sheet (drag handles), LRCLIB/YouTube lyrics, track menu, playlist
@@ -61,10 +65,19 @@ Done and verified (85 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright s
 - **Downloads** `src/downloads/`: `storage.ts` (iPhone: `Library/NoCloud/music/<id>.m4a|.jpg|.json`, download to
   `.part` then rename, size check, `SAFE_ID` check before any path; web: Blobs in `db.blobs`), `manager.ts` (retry
   with fresh URL, resume on launch / when back online, rebuild from `.json` sidecars, auto-download liked, live index
-  in `useDownloads`), `concurrency.ts` (**adaptive parallel downloads, AIMD 1–15**: +1 per success while total
+  in `useDownloads`; settings `{concurrency, cellular, autoLiked}`; launch only reads `.json` sidecars missing from
+  the DB), `concurrency.ts` (**adaptive parallel downloads, AIMD 1–15**: +1 per success while total
   throughput still grows, −1 when it drops (bandwidth peak), ÷2 + exponential cooldown on 403/429; 4G/5G capped at 6;
   setting Tự động / fixed 1–15 + "tải bằng dữ liệu di động"; `Semaphore(3)` around `resolveAudio`; 150 ms start gap).
   FileTransfer iOS creates one URLSession per download, so no 6-connections-per-host cap.
+- **Shared helpers** (use these, don't re-create): `lib/async.ts` (`sleep`, `clamp`, `Semaphore`, `memoAsync` = memoize
+  that forgets rejections), `lib/text.ts` (`fold`, `cleanTitle`, `cleanArtist`), `lib/log.ts` `errorMessage(err,
+  fallback)`, `lib/format.ts` (`formatClock`, `formatWhen`, …), `ui/overlays.ts` (`runAction(fn, done)` = run + toast
+  + log errors, `confirmAction`, `copyText`, `toggleLikeWithToast`), components `SettingsRow`/`Toggle`, `ProgressBar`,
+  `PlayContextButton`, `PlayPauseIcon`, `PlaylistNameForm`, `TrackArtwork` (falls back to the downloaded cover
+  offline), `PageLoading`/`PageError`/`ErrorState`, hook `useSlideIn` (Sheet/FullPlayer). Tests replace `sleep` with
+  `vi.mock('@/lib/async', …)` instead of production test hooks. `youtube/stream.ts` bumps an epoch on
+  `clearAudioCache()` so a link resolved on the old network is never cached (it re-resolves).
 - **Security**: build-only CSP (`vite.config.ts`, `'unsafe-eval'` needed by youtubei.js + BotGuard), dev proxy SSRF fix
   + localhost-only unless `MELO_LAN=1`, BotGuard interpreter URL must be `https://(www.)google.com/js/…`
   (`trustedInterpreterUrl`), log redaction (`redact()` in `lib/log.ts`: googlevideo URLs, tokens, secrets, IPs),
@@ -72,7 +85,8 @@ Done and verified (85 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright s
 - **Smoothness**: youtubei.js + BotGuard lazy-loaded (initial JS 477 KB / 147 KB gzip; **CI budget** `npm run
   check:bundle` = `scripts/check-bundle.mjs`, fails above 170 KB JS / 12 KB CSS gzip for what index.html loads
   eagerly), right-sized artwork (`lib/images.ts`), `content-visibility` rows, rAF position (~15 fps) only while
-  visible. Download progress is coalesced (first event + completion immediate, otherwise ≤4 store updates/s); the
+  visible — only `SeekBar`, `LyricsPanel` (memo lines) and the mini player's progress bar subscribe to the live
+  position, and `TrackRow` only follows play/pause for the current row. Download progress is coalesced (first event + completion immediate, otherwise ≤4 store updates/s); the
   Downloads page (always mounted) only re-renders tiny `DownloadStatusLine` / memo `PendingRow` subscribers.
 - **Spotify sync** `src/sync/` (user guide `docs/SPOTIFY.md`; Gmail login does NOT sync Spotify — Spotify needs its own
   OAuth, the user may pick "Continue with Google" on Spotify's page): `spotify-auth.ts` Authorization Code + **PKCE**
@@ -87,7 +101,8 @@ Done and verified (85 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright s
   network errors not cached), `Semaphore(2)`. `spotify-sync.ts`: playlists owned/collaborative + Liked Songs →
   `db.playlists` rows `source: 'spotify'` (`spotifyId`, `snapshotId`, `unmatched`; DB v2), skip unchanged snapshot,
   delete playlists removed on Spotify (never `export:` ones), auto-sync on launch/resume if > 12 h, single-flight;
-  `importSpotifyExport` reads Playlist*.json / YourLibrary.json (no Premium needed). Spotify code is lazy-loaded
+  sync and file import share one lock (`withProgress`) and one pipeline (`matchAndWrite`); playlists are read 3 at a
+  time; `updatedAt` only changes when the track list changes. `importSpotifyExport` reads Playlist*.json / YourLibrary.json (no Premium needed). Spotify code is lazy-loaded
   (main.tsx dynamic import + `React.lazy` in Settings) so the initial bundle stays ~148 KB gzip.
   Spotify rules since Feb/Mar 2026 (dev mode): owner needs **Premium**, 1 client ID, ≤ 5 users, only owned/collab
   playlists readable, refresh tokens expire after 6 months. This container cannot reach *.spotify.com — the flow is

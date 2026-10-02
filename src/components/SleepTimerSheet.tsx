@@ -1,6 +1,7 @@
+import { formatClock } from '@/lib/format';
 import { setSleepTimer } from '@/player/controller';
 import { usePlayer } from '@/player/store';
-import { closeSleepTimer, toast, useOverlays } from '@/ui/overlays';
+import { closeSleepTimer, runAction, useOverlays } from '@/ui/overlays';
 import { Sheet } from './Sheet';
 
 const OPTIONS = [5, 10, 15, 30, 45, 60, 90];
@@ -14,9 +15,8 @@ export function SleepTimerSheet() {
 
   const choose = (minutes: number, atEnd = false) => {
     closeSleepTimer();
-    void setSleepTimer(minutes, atEnd).then(() =>
-      toast(minutes === 0 && !atEnd ? 'Đã tắt hẹn giờ' : atEnd ? 'Sẽ dừng khi hết bài này' : `Sẽ dừng sau ${minutes} phút`)
-    );
+    const done = atEnd ? 'Sẽ dừng khi hết bài này' : minutes === 0 ? 'Đã tắt hẹn giờ' : `Sẽ dừng sau ${minutes} phút`;
+    void runAction(() => setSleepTimer(minutes, atEnd), done);
   };
 
   return (
@@ -25,7 +25,7 @@ export function SleepTimerSheet() {
         <h2 className="pb-2 text-center text-[17px] font-bold">Hẹn giờ tắt</h2>
         {active && (
           <p className="pb-2 text-center text-[13px] text-accent">
-            {endOfItem ? 'Dừng khi hết bài này' : `Dừng lúc ${new Date(endsAt!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}
+            {endOfItem ? 'Dừng khi hết bài này' : `Dừng lúc ${formatClock(endsAt!)}`}
           </p>
         )}
         {OPTIONS.map((m) => (

@@ -5,25 +5,11 @@ import { getYouTubeLyrics } from '@/youtube/music';
 import type { Lyrics, LyricsLine, Track } from '@/youtube/types';
 import { db } from './db';
 import { log } from './log';
+import { cleanArtist, cleanTitle } from './text';
 
 const LRCLIB = 'https://lrclib.net/api';
 /** Không tìm thấy lời: thử lại sau 7 ngày. */
 const MISS_TTL_MS = 7 * 24 * 3600_000;
-
-/** Bỏ phần thừa trong tên bài YouTube: "(Official Video)", "[MV]", "| Lyrics", "ft. …". */
-export function cleanTitle(title: string): string {
-  return title
-    .replace(/\s*[([【](official|lyrics?|mv|m\/v|audio|video|visuali[sz]er|live|4k|hd|karaoke|vietsub|lyric video|official music video|official audio)[^)\]】]*[)\]】]/gi, '')
-    .replace(/\s*[|｜].*$/, '')
-    .replace(/\s+(ft\.?|feat\.?|featuring)\s.*$/i, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
-}
-
-/** Bỏ hậu tố " - Topic" của kênh nghệ sĩ tự tạo. */
-export function cleanArtist(name: string): string {
-  return name.replace(/\s+-\s+Topic$/i, '').trim();
-}
 
 const TIME_TAG = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
 

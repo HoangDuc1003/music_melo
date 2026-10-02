@@ -137,6 +137,8 @@ const network = vi.hoisted(() => {
 });
 
 vi.mock('capacitor-melo-player', () => ({ MeloPlayer: native.plugin }));
+// Không giãn cách thật giữa các lần lấy link.
+vi.mock('@/lib/async', async (original) => ({ ...(await original<object>()), sleep: async () => undefined }));
 vi.mock('@capacitor/network', () => ({ Network: network.Network }));
 vi.mock('@/youtube/stream', () => ({
   StreamError: youtube.StreamError,
@@ -146,6 +148,7 @@ vi.mock('@/youtube/stream', () => ({
 }));
 vi.mock('@/youtube/music', () => ({ getUpNext: youtube.getUpNext }));
 
+import { initNetwork } from '@/lib/network';
 import * as player from './controller';
 import { usePlayer } from './store';
 
@@ -168,7 +171,8 @@ beforeEach(async () => {
   youtube.getUpNext.mockResolvedValue([]);
   network.listeners.length = 0;
   vi.clearAllMocks();
-  player.__resetPlayerForTests({ sleep: async () => undefined });
+  player.__resetPlayerForTests();
+  await initNetwork();
   await player.initPlayer();
 });
 
@@ -304,6 +308,18 @@ describe('radio', () => {
     expect(storeIds()).toEqual(['a', 'b', 'c', 'd', 'e', 'r1']);
     expect(native.plugin.skipTo).toHaveBeenCalledWith({ index: 5 });
   });
+
+  it('hết hàng chờ đúng lúc radio đang tải: đợi lượt đó xong rồi phát tiếp', async () => {
+    let release: (value: Track[]) => void = () => undefined;
+    youtube.getUpNext.mockImplementation(() => new Promise<Track[]>((resolve) => (release = resolve)));
+    await player.playTracks(tracks('a'));
+    native.emit('queueEnded');
+    release(tracks('r1', 'r2'));
+    await settle();
+    expect(youtube.getUpNext).toHaveBeenCalledTimes(1);
+    expect(storeIds()).toEqual(['a', 'r1', 'r2']);
+    expect(native.plugin.skipTo).toHaveBeenCalledWith({ index: 1 });
+  });
 });
 
 describe('sửa hàng chờ', () => {
@@ -415,7 +431,7 @@ describe('lưu và khôi phục', () => {
     player.saveSnapshot();
 
     native.reset();
-    player.__resetPlayerForTests({ sleep: async () => undefined });
+    player.__resetPlayerForTests();
     await player.initPlayer();
 
     expect(storeIds()).toEqual(['a', 'b', 'c']);
@@ -425,11 +441,23 @@ describe('lưu và khôi phục', () => {
     expect(native.ids()).toEqual(['a', 'b', 'c']);
   });
 
+  it('bài đã tải trong hàng chờ khôi phục được phát từ file (không cần mạng)', async () => {
+    await player.playTracks(tracks('a', 'b'));
+    player.saveSnapshot();
+    native.reset();
+    player.__resetPlayerForTests();
+    // main.tsx nối phần tải về với trình phát trước initPlayer.
+    player.setFileUrlProvider(async (id) => (id === 'b' ? 'file:///music/b.m4a' : undefined));
+    await player.initPlayer();
+    expect(native.state.items[0].fileUrl).toBeFalsy();
+    expect(native.state.items[1].fileUrl).toBe('file:///music/b.m4a');
+  });
+
   it('native vẫn đang phát đúng hàng chờ thì không nạp lại', async () => {
     await player.playTracks(tracks('a', 'b'));
     player.saveSnapshot();
     native.plugin.setQueue.mockClear();
-    player.__resetPlayerForTests({ sleep: async () => undefined });
+    player.__resetPlayerForTests();
     await player.initPlayer();
     expect(native.plugin.setQueue).not.toHaveBeenCalled();
     expect(storeIds()).toEqual(['a', 'b']);

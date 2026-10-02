@@ -5,8 +5,9 @@ import { move, setAutoplay, skipTo } from '@/player/controller';
 import type { QueueEntry } from '@/player/queue';
 import { usePlayer } from '@/player/store';
 import { openTrackMenu } from '@/ui/overlays';
-import { Artwork } from './Artwork';
+import { TrackArtwork } from './TrackArtwork';
 import { Equalizer } from './Equalizer';
+import { Toggle } from './SettingsRow';
 import { Sheet } from './Sheet';
 
 const ROW_HEIGHT = 60;
@@ -17,7 +18,7 @@ function QueueRow({ entry, onPlay, onMenu, handle }: { entry: QueueEntry; onPlay
   return (
     <div className="flex items-center gap-3 px-4" style={{ height: ROW_HEIGHT }}>
       <button className="flex min-w-0 flex-1 items-center gap-3 text-left" onClick={onPlay}>
-        <Artwork src={entry.track.thumbnail} size={44} className="size-11 shrink-0" />
+        <TrackArtwork track={entry.track} size={44} className="size-11 shrink-0" />
         <div className="min-w-0">
           <div className="truncate text-[15px]">{entry.track.title}</div>
           <div className="truncate text-[13px] text-subdued">{joinArtists(entry.track.artists)}</div>
@@ -43,8 +44,10 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
   const startY = useRef(0);
 
   const current = entries[index];
+  /** số bài còn lại sau bài đang phát */
+  const remaining = entries.length - index - 1;
   const upcoming = entries.slice(index + 1, index + 1 + MAX_VISIBLE);
-  const hidden = Math.max(0, entries.length - index - 1 - upcoming.length);
+  const hidden = Math.max(0, remaining - upcoming.length);
 
   // Thứ tự đang hiển thị khi kéo (xem trước chỗ thả).
   const order = upcoming.map((_, i) => i);
@@ -79,7 +82,7 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
           <>
             <h3 className="px-4 pb-1 text-[16px] font-bold">Đang phát</h3>
             <div className="flex items-center gap-3 px-4" style={{ height: ROW_HEIGHT }}>
-              <Artwork src={current.track.thumbnail} size={44} className="size-11 shrink-0" />
+              <TrackArtwork track={current.track} size={44} className="size-11 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-[15px] text-accent">{current.track.title}</div>
                 <div className="truncate text-[13px] text-subdued">{joinArtists(current.track.artists)}</div>
@@ -91,7 +94,7 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
 
         <div className="mt-4 flex items-center justify-between px-4 pb-1">
           <h3 className="text-[16px] font-bold">Tiếp theo</h3>
-          <span className="text-[13px] text-subdued">{entries.length - index - 1} bài</span>
+          <span className="text-[13px] text-subdued">{remaining} bài</span>
         </div>
         {order.map((i) => {
           const entry = upcoming[i];
@@ -129,7 +132,7 @@ export function QueueSheet({ open, onClose }: { open: boolean; onClose: () => vo
               {repeat === 'off' ? 'Hết hàng chờ thì phát tiếp radio' : 'Đang lặp lại nên không tự nối thêm'}
             </div>
           </div>
-          <input type="checkbox" className="toggle" checked={autoplay} onChange={(e) => setAutoplay(e.target.checked)} />
+          <Toggle checked={autoplay} onChange={setAutoplay} />
         </label>
       </div>
     </Sheet>

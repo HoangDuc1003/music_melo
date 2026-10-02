@@ -36,6 +36,28 @@ export function useLivePosition(active = true): number {
   return livePosition(state, Math.max(now, state.positionAt));
 }
 
+/**
+ * Hiện/ẩn có hiệu ứng trượt: mở thì gắn vào cây rồi trượt vào ở khung hình sau (`shown`);
+ * đóng thì trượt ra, hết `exitMs` mới gỡ khỏi cây (`mounted`).
+ */
+export function useSlideIn(open: boolean, exitMs: number, onOpen?: () => void): { mounted: boolean; shown: boolean } {
+  const [mounted, setMounted] = useState(open);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      onOpen?.();
+      const frame = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)));
+      return () => cancelAnimationFrame(frame);
+    }
+    setShown(false);
+    const timer = setTimeout(() => setMounted(false), exitMs);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+  return { mounted, shown };
+}
+
 // ---------- Màu nền theo ảnh bìa ----------
 
 const PALETTE = ['#4a2c6b', '#1f4f6b', '#6b2c3c', '#2c6b4a', '#6b5a2c', '#3c2c6b', '#6b3c2c', '#2c5a6b', '#5a6b2c', '#6b2c5a'];
@@ -49,7 +71,7 @@ function hashColor(key: string): string {
 }
 
 /** Màu chủ đạo của ảnh, làm tối và tăng độ đậm để chữ trắng luôn đọc rõ. */
-export function toneColor(r: number, g: number, b: number): string {
+function toneColor(r: number, g: number, b: number): string {
   const max = Math.max(r, g, b);
   const min = Math.min(r, g, b);
   const l = (max + min) / 2 / 255;

@@ -4,7 +4,7 @@ import { Component, memo, useState, type ReactNode } from 'react';
 import { EdgeSwipeBack } from '@/components/EdgeSwipeBack';
 import { FullPlayer } from '@/components/FullPlayer';
 import { MiniPlayer } from '@/components/MiniPlayer';
-import { PageContext } from '@/components/Page';
+import { ErrorState, PageContext } from '@/components/Page';
 import { PlaylistPicker } from '@/components/PlaylistPicker';
 import { SleepTimerSheet } from '@/components/SleepTimerSheet';
 import { TabBar } from '@/components/TabBar';
@@ -62,11 +62,8 @@ class PageBoundary extends Component<{ children: ReactNode }, { error?: Error }>
   render() {
     if (!this.state.error) return this.props.children;
     return (
-      <div className="safe-top flex h-full flex-col items-center justify-center gap-3 px-8 text-center text-subdued">
-        <p>Trang này bị lỗi. Chi tiết ở Cài đặt → Nhật ký.</p>
-        <button className="rounded-full border border-white/40 px-5 py-2 text-sm font-semibold text-white" onClick={() => this.setState({ error: undefined })}>
-          Thử lại
-        </button>
+      <div className="safe-top flex h-full items-center justify-center">
+        <ErrorState message="Trang này bị lỗi. Chi tiết ở Cài đặt → Nhật ký." onRetry={() => this.setState({ error: undefined })} />
       </div>
     );
   }

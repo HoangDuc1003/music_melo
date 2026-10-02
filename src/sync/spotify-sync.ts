@@ -5,10 +5,12 @@
 // - Không có Spotify Premium (không tạo được app Spotify): nhập từ file dữ liệu Spotify gửi qua email.
 import { App } from '@capacitor/app';
 import { create } from 'zustand';
+import { Semaphore } from '@/lib/async';
 import { db, getSetting, setSetting, type PlaylistRow } from '@/lib/db';
-import { log } from '@/lib/log';
+import { errorMessage, log } from '@/lib/log';
 import { isOnline } from '@/lib/network';
 import { isNative } from '@/lib/platform';
+import { fold } from '@/lib/text';
 import { getMe, getPlaylists, getPlaylistTracks, getSavedTracks, type SourceTrack } from '@/sync/spotify-api';
 import {
   disconnectSpotifyAuth,
@@ -18,14 +20,16 @@ import {
   SpotifyAuthError,
   startSpotifyLogin
 } from '@/sync/spotify-auth';
-import { fold, matchTracks } from './match';
+import { matchTracks } from './match';
 
-export const LIKED_ID = 'liked';
+const LIKED_ID = 'liked';
 export const LIKED_NAME = 'Bài hát đã thích trên Spotify';
 const EXPORT_PREFIX = 'export:';
 const AUTO_SYNC_EVERY_MS = 12 * 3600_000;
 /** Mỗi lượt tìm tối đa chừng này bài mới trên YouTube (~2–3 phút); thư viện lớn đồng bộ dần qua vài lượt. */
 const MAX_SEARCHES_PER_RUN = 400;
+/** Đọc 3 playlist cùng lúc (Spotify trả 429 thì spotify-api tự đợi rồi thử lại). */
+const PLAYLIST_READ_PARALLEL = 3;
 const LAST_SYNC_SETTING = 'spotifyLastSync';
 const AUTO_SYNC_SETTING = 'spotifyAutoSync';
 const USER_SETTING = 'spotifyUser';
@@ -49,10 +53,6 @@ const initialState = (): SpotifyState => ({ connected: false, syncing: false, do
 export const useSpotify = create<SpotifyState>(initialState);
 const set = (partial: Partial<SpotifyState>) => useSpotify.setState(partial);
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 /** Một nguồn cần ghi thành playlist Melo. `tracks` undefined = không đổi từ lần trước, giữ nguyên. */
 interface SourceList {
   spotifyId: string;
@@ -72,67 +72,85 @@ export function listSnapshot(tracks: SourceTrack[]): string {
   return `${tracks.length}:${h.toString(16)}`;
 }
 
-async function spotifyPlaylists(): Promise<PlaylistRow[]> {
-  return db.playlists.filter((p) => p.source === 'spotify').toArray();
+async function spotifyPlaylistsById(): Promise<Map<string, PlaylistRow>> {
+  const rows = await db.playlists.filter((p) => p.source === 'spotify').toArray();
+  return new Map(rows.map((p) => [p.spotifyId!, p]));
 }
 
-/** Ghi các danh sách đã ghép thành playlist Melo. Trả về [số bài ghép được, số bài không tìm thấy]. */
-async function writePlaylists(lists: SourceList[], matches: Map<string, string>, existing: Map<string, PlaylistRow>): Promise<[number, number]> {
-  let matched = 0;
-  let missing = 0;
+const isFromExportFile = (p: PlaylistRow) => Boolean(p.spotifyId?.startsWith(EXPORT_PREFIX));
+/** Cùng snapshot và đủ bài: không cần đọc lại danh sách bài (bài thiếu thì đọc lại để tìm lại). */
+const isUnchanged = (local: PlaylistRow | undefined, snapshotId: string) => local?.snapshotId === snapshotId && !local.unmatched;
+const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
+
+interface WriteResult {
+  matched: number;
+  missing: number;
+}
+
+/** Ghi các danh sách đã ghép thành playlist Melo. */
+async function writePlaylists(lists: SourceList[], matches: Map<string, string>, existing: Map<string, PlaylistRow>): Promise<WriteResult> {
+  const result: WriteResult = { matched: 0, missing: 0 };
   await db.transaction('rw', db.playlists, async () => {
     const now = Date.now();
     for (const list of lists) {
       const local = existing.get(list.spotifyId);
+      const name = list.name.slice(0, 100);
+      const cover = list.image ?? local?.cover;
       if (!list.tracks) {
-        if (local) {
-          matched += local.trackIds.length;
-          missing += local.unmatched ?? 0;
-          if (local.name !== list.name || (list.image && local.cover !== list.image)) {
-            await db.playlists.update(local.id!, { name: list.name, cover: list.image ?? local.cover });
-          }
-        }
+        if (!local) continue;
+        result.matched += local.trackIds.length;
+        result.missing += local.unmatched ?? 0;
+        if (local.name !== name || local.cover !== cover) await db.playlists.update(local.id!, { name, cover });
         continue;
       }
       const trackIds = [...new Set(list.tracks.map((t) => matches.get(t.key)).filter((id): id is string => Boolean(id)))];
       const unmatched = list.tracks.filter((t) => !matches.has(t.key)).length;
-      matched += trackIds.length;
-      missing += unmatched;
-      const fields = { name: list.name.slice(0, 100), trackIds, snapshotId: list.snapshotId, unmatched, updatedAt: now };
-      if (local) await db.playlists.update(local.id!, { ...fields, cover: list.image ?? local.cover });
-      else await db.playlists.add({ ...fields, source: 'spotify', spotifyId: list.spotifyId, cover: list.image, createdAt: now });
+      result.matched += trackIds.length;
+      result.missing += unmatched;
+      const fields = { name, cover, trackIds, snapshotId: list.snapshotId, unmatched };
+      if (!local) await db.playlists.add({ ...fields, source: 'spotify', spotifyId: list.spotifyId, createdAt: now, updatedAt: now });
+      // Danh sách bài không đổi thì giữ `updatedAt` (thứ tự trong Thư viện không bị xáo).
+      else await db.playlists.update(local.id!, sameIds(local.trackIds, trackIds) ? fields : { ...fields, updatedAt: now });
     }
   });
-  return [matched, missing];
+  return result;
 }
 
-async function readLists(): Promise<{ lists: SourceList[]; existing: Map<string, PlaylistRow>; skipped: number }> {
-  const me = await getMe();
+/** Đọc thư viện Spotify; playlist không đổi từ lần trước thì không đọc lại danh sách bài. */
+async function readLists(existing: Map<string, PlaylistRow>): Promise<{ lists: SourceList[]; skipped: number }> {
+  const [me, all, liked] = await Promise.all([getMe(), getPlaylists(), getSavedTracks()]);
   set({ user: me.name });
   await setSetting(USER_SETTING, me.name);
-  const existing = new Map((await spotifyPlaylists()).map((p) => [p.spotifyId!, p]));
-  const all = await getPlaylists();
   // Development Mode chỉ đọc được bài trong playlist mình sở hữu hoặc cùng chỉnh sửa.
   const readable = all.filter((p) => p.ownerId === me.id || p.collaborative);
-  const lists: SourceList[] = [];
 
-  set({ phase: 'Đang đọc Bài hát đã thích…' });
-  const liked = await getSavedTracks();
   const likedSnapshot = listSnapshot(liked);
-  const likedLocal = existing.get(LIKED_ID);
-  const likedSame = likedLocal?.snapshotId === likedSnapshot && !likedLocal.unmatched;
-  lists.push({ spotifyId: LIKED_ID, name: LIKED_NAME, snapshotId: likedSnapshot, tracks: likedSame ? undefined : liked });
+  const likedList: SourceList = {
+    spotifyId: LIKED_ID,
+    name: LIKED_NAME,
+    snapshotId: likedSnapshot,
+    tracks: isUnchanged(existing.get(LIKED_ID), likedSnapshot) ? undefined : liked
+  };
 
-  for (const [i, p] of readable.entries()) {
-    const local = existing.get(p.id);
-    const same = local?.snapshotId === p.snapshotId && !local.unmatched;
-    if (!same) set({ phase: `Đang đọc playlist ${i + 1}/${readable.length}: ${p.name}` });
-    lists.push({ spotifyId: p.id, name: p.name, snapshotId: p.snapshotId, image: p.image, tracks: same ? undefined : await getPlaylistTracks(p.id) });
-  }
-  return { lists, existing, skipped: all.length - readable.length };
+  const changed = readable.filter((p) => !isUnchanged(existing.get(p.id), p.snapshotId));
+  const gate = new Semaphore(PLAYLIST_READ_PARALLEL);
+  let read = 0;
+  const tracksById = new Map(
+    await Promise.all(
+      changed.map((p) =>
+        gate.run(async () => {
+          const tracks = await getPlaylistTracks(p.id);
+          set({ phase: `Đang đọc playlist ${++read}/${changed.length}` });
+          return [p.id, tracks] as const;
+        })
+      )
+    )
+  );
+  const lists = readable.map((p): SourceList => ({ spotifyId: p.id, name: p.name, snapshotId: p.snapshotId, image: p.image, tracks: tracksById.get(p.id) }));
+  return { lists: [likedList, ...lists], skipped: all.length - readable.length };
 }
 
-function summary(lists: number, matched: number, missing: number, skipped = 0, pending = 0): string {
+function summary({ lists, matched, missing, pending = 0, skipped = 0 }: WriteResult & { lists: number; pending?: number; skipped?: number }): string {
   const parts = [`${lists} playlist`, `${matched} bài`];
   // Bài chưa kịp tìm (lượt sau tìm tiếp) không tính là "chưa có".
   if (missing - pending > 0) parts.push(`${missing - pending} bài chưa có trên YouTube Music`);
@@ -141,31 +159,52 @@ function summary(lists: number, matched: number, missing: number, skipped = 0, p
   return parts.join(' • ');
 }
 
+/** Ghép bài sang YouTube Music rồi ghi playlist (dùng chung cho đồng bộ và nhập từ file). */
+async function matchAndWrite(lists: SourceList[], existing: Map<string, PlaylistRow>, cancelled?: () => boolean): Promise<WriteResult & { pending: number }> {
+  set({ phase: 'Đang tìm bài trên YouTube Music…' });
+  const { matches, pending } = await matchTracks(lists.flatMap((l) => l.tracks ?? []), {
+    onProgress: (done, total) => set({ done, total }),
+    maxSearches: MAX_SEARCHES_PER_RUN,
+    cancelled
+  });
+  // Lượt đã huỷ (ngắt kết nối giữa chừng) không được ghi gì; runSync bỏ qua lỗi của lượt đã huỷ.
+  if (cancelled?.()) throw new Error('Đã huỷ đồng bộ');
+  return { ...(await writePlaylists(lists, matches, existing)), pending };
+}
+
+/** Đồng bộ và nhập từ file chạy lần lượt (không ghi chồng playlist của nhau). */
+const lock = new Semaphore(1);
+
+/** Chạy một lượt đồng bộ/nhập: hiện tiến độ trong lúc chạy. */
+async function withProgress<T>(phase: string, fn: () => Promise<T>): Promise<T> {
+  return lock.run(async () => {
+    set({ syncing: true, error: undefined, phase, done: 0, total: 0 });
+    try {
+      return await fn();
+    } finally {
+      set({ syncing: false, phase: undefined });
+    }
+  });
+}
+
 /** Tăng khi ngắt kết nối: lượt đồng bộ đang chạy thấy khác thì dừng, không ghi gì nữa. */
 let generation = 0;
 
 async function runSync(): Promise<void> {
   const gen = generation;
   const cancelled = () => gen !== generation;
-  set({ syncing: true, error: undefined, phase: 'Đang đọc thư viện Spotify…', done: 0, total: 0 });
   try {
-    const { lists, existing, skipped } = await readLists();
+    const existing = await spotifyPlaylistsById();
+    const { lists, skipped } = await readLists(existing);
     if (cancelled()) return;
-    set({ phase: 'Đang tìm bài trên YouTube Music…' });
-    const { matches, pending } = await matchTracks(lists.flatMap((l) => l.tracks ?? []), {
-      onProgress: (done, total) => set({ done, total }),
-      maxSearches: MAX_SEARCHES_PER_RUN,
-      cancelled
-    });
-    if (cancelled()) return;
-    const [matched, missing] = await writePlaylists(lists, matches, existing);
+    const written = await matchAndWrite(lists, existing, cancelled);
     // Playlist đã xoá / bỏ theo dõi trên Spotify thì xoá theo (không đụng playlist nhập từ file).
     const keep = new Set(lists.map((l) => l.spotifyId));
-    const removed = [...existing.values()].filter((p) => !p.spotifyId!.startsWith(EXPORT_PREFIX) && !keep.has(p.spotifyId!));
+    const removed = [...existing.values()].filter((p) => !isFromExportFile(p) && !keep.has(p.spotifyId!));
     await db.playlists.bulkDelete(removed.map((p) => p.id!));
     const now = Date.now();
     await setSetting(LAST_SYNC_SETTING, now);
-    const result = summary(lists.length, matched, missing, skipped, pending);
+    const result = summary({ ...written, lists: lists.length, skipped });
     set({ lastSyncAt: now, lastResult: result });
     log.info('spotify', `đồng bộ xong: ${result}`);
   } catch (err) {
@@ -176,8 +215,6 @@ async function runSync(): Promise<void> {
       await setSetting(USER_SETTING, '');
     }
     set({ error: errorMessage(err) });
-  } finally {
-    set({ syncing: false, phase: undefined });
   }
 }
 
@@ -185,7 +222,7 @@ let running: Promise<void> | undefined;
 
 /** Đồng bộ ngay (gọi nhiều lần cùng lúc chỉ chạy một lượt). Lỗi hiện trong `useSpotify().error`. */
 export function syncSpotify(): Promise<void> {
-  running ??= runSync().finally(() => {
+  running ??= withProgress('Đang đọc thư viện Spotify…', runSync).finally(() => {
     running = undefined;
   });
   return running;
@@ -210,7 +247,7 @@ export async function disconnectSpotify(removePlaylists = false): Promise<void> 
   generation += 1;
   await disconnectSpotifyAuth();
   if (removePlaylists) {
-    const synced = (await spotifyPlaylists()).filter((p) => !p.spotifyId?.startsWith(EXPORT_PREFIX));
+    const synced = [...(await spotifyPlaylistsById()).values()].filter((p) => !isFromExportFile(p));
     await db.playlists.bulkDelete(synced.map((p) => p.id!));
   }
   await setSetting(USER_SETTING, '');
@@ -267,7 +304,6 @@ export function parseSpotifyExport(text: string): SourceList[] {
 
 /** Nhập các file .json đã chọn. Trả về câu tóm tắt để hiện cho người dùng. */
 export async function importSpotifyExport(files: { name: string; text(): Promise<string> }[]): Promise<string> {
-  if (useSpotify.getState().syncing) throw new Error('Đang đồng bộ, đợi xong rồi nhập');
   const lists: SourceList[] = [];
   for (const file of files) {
     try {
@@ -277,24 +313,21 @@ export async function importSpotifyExport(files: { name: string; text(): Promise
     }
   }
   if (!lists.length) throw new Error('Không thấy playlist hay bài hát nào. Hãy chọn file Playlist1.json hoặc YourLibrary.json');
-  set({ syncing: true, error: undefined, phase: 'Đang tìm bài trên YouTube Music…', done: 0, total: 0 });
-  try {
-    const existing = new Map((await spotifyPlaylists()).map((p) => [p.spotifyId!, p]));
-    const { matches, pending } = await matchTracks(lists.flatMap((l) => l.tracks ?? []), {
-      onProgress: (done, total) => set({ done, total }),
-      maxSearches: MAX_SEARCHES_PER_RUN
-    });
-    const [matched, missing] = await writePlaylists(lists, matches, existing);
-    return `Đã nhập ${summary(lists.length, matched, missing, 0, pending)}${pending ? ' (nhập lại file để tìm tiếp)' : ''}`;
-  } finally {
-    set({ syncing: false, phase: undefined });
-  }
+  const written = await withProgress('Đang tìm bài trên YouTube Music…', async () => matchAndWrite(lists, await spotifyPlaylistsById()));
+  return `Đã nhập ${summary({ ...written, lists: lists.length })}${written.pending ? ' (nhập lại file để tìm tiếp)' : ''}`;
 }
 
 // ---------- Khởi động ----------
 
+let initialized: Promise<void> | undefined;
+
 /** Gọi một lần khi app mở. */
-export async function initSpotify(): Promise<void> {
+export function initSpotify(): Promise<void> {
+  initialized ??= init();
+  return initialized;
+}
+
+async function init() {
   const [connected, lastSyncAt, autoSync, user] = await Promise.all([
     isSpotifyConnected(),
     getSetting<number>(LAST_SYNC_SETTING, 0),
@@ -317,6 +350,7 @@ export async function initSpotify(): Promise<void> {
 /** Chỉ dùng trong test. */
 export function __resetSpotifySyncForTests() {
   running = undefined;
+  initialized = undefined;
   generation = 0;
   useSpotify.setState(initialState(), true);
 }

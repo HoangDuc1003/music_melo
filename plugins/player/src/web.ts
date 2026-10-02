@@ -3,6 +3,8 @@
 import { WebPlugin } from '@capacitor/core';
 import type { MeloPlayerPlugin, PlayerItem, PlayerState, RepeatMode, SetQueueOptions } from './definitions';
 
+const secureKey = (key: string) => `melo.secure.${key}`;
+
 export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
   private readonly audio: HTMLAudioElement;
   private items: PlayerItem[] = [];
@@ -252,14 +254,14 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
 
   // Trình duyệt không có Keychain: dùng localStorage, chỉ để chạy thử trên PC.
   async keychainGet({ key }: { key: string }): Promise<{ value: string | null }> {
-    return { value: localStorage.getItem(`melo.secure.${key}`) };
+    return { value: localStorage.getItem(secureKey(key)) };
   }
 
   async keychainSet({ key, value }: { key: string; value: string }): Promise<void> {
-    localStorage.setItem(`melo.secure.${key}`, value);
+    localStorage.setItem(secureKey(key), value);
   }
 
   async keychainRemove({ key }: { key: string }): Promise<void> {
-    localStorage.removeItem(`melo.secure.${key}`);
+    localStorage.removeItem(secureKey(key));
   }
 }

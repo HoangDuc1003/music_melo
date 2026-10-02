@@ -6,7 +6,7 @@ import { useNetwork } from '@/lib/network';
 import { currentEntry, usePlayer } from '@/player/store';
 import { openTrackMenu, type TrackMenuTarget } from '@/ui/overlays';
 import type { Track } from '@/youtube/types';
-import { Artwork } from './Artwork';
+import { TrackArtwork } from './TrackArtwork';
 import { DownloadBadge } from './DownloadBadge';
 import { Equalizer } from './Equalizer';
 
@@ -22,8 +22,8 @@ interface Props {
 /** Một dòng bài hát. `content-visibility` giúp danh sách dài cuộn mượt mà không cần ảo hoá. */
 export const TrackRow = memo(function TrackRow({ track, onPlay, number, showDuration = false, menu }: Props) {
   const isCurrent = usePlayer((s) => currentEntry(s)?.track.id === track.id);
-  const playing = usePlayer((s) => s.playing);
-  const localArt = useDownloads((s) => s.artwork.get(track.id));
+  // Chỉ dòng đang phát theo dõi play/pause (bấm tạm dừng không vẽ lại cả danh sách).
+  const playing = usePlayer((s) => s.playing && currentEntry(s)?.track.id === track.id);
   const downloaded = useDownloads((s) => s.rows.get(track.id)?.status === 'done');
   const offline = useNetwork((s) => !s.online);
   return (
@@ -35,7 +35,7 @@ export const TrackRow = memo(function TrackRow({ track, onPlay, number, showDura
           </span>
         ) : (
           <div className="relative size-12 shrink-0">
-            <Artwork src={track.thumbnail} fallbackSrc={localArt} size={48} className="size-12" />
+            <TrackArtwork track={track} size={48} className="size-12" />
             {isCurrent && (
               <div className="absolute inset-0 flex items-center justify-center rounded bg-black/50">
                 <Equalizer playing={playing} />

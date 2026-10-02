@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AdaptiveLimiter, classifyFailure, HARD_MAX, Semaphore } from './concurrency';
+import { AdaptiveLimiter, classifyFailure, HARD_MAX } from './concurrency';
 
 function clock(start = 0) {
   let t = start;
@@ -103,24 +103,5 @@ describe('classifyFailure', () => {
     expect(classifyFailure(new Error('The request timed out.'))).toBe('network');
     expect(classifyFailure(new Error('The Internet connection appears to be offline.'))).toBe('network');
     expect(classifyFailure(new Error('Tải chưa trọn (100/200 byte)'))).toBe('other');
-  });
-});
-
-describe('Semaphore', () => {
-  it('không chạy quá số việc cho phép', async () => {
-    const sem = new Semaphore(3);
-    let running = 0;
-    let peak = 0;
-    await Promise.all(
-      Array.from({ length: 10 }, () =>
-        sem.run(async () => {
-          running += 1;
-          peak = Math.max(peak, running);
-          await new Promise((r) => setTimeout(r, 5));
-          running -= 1;
-        })
-      )
-    );
-    expect(peak).toBe(3);
   });
 });

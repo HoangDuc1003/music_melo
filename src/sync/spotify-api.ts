@@ -1,6 +1,7 @@
 // Đọc thư viện Spotify của chính người dùng (Web API, Development Mode).
 // Theo đợt đổi API tháng 2/2026: danh sách bài của playlist ở /playlists/{id}/items (mỗi mục có `item`,
 // bản cũ là `track`), và chỉ đọc được playlist mình sở hữu hoặc cùng chỉnh sửa.
+import { sleep } from '@/lib/async';
 import { appFetch } from '@/youtube/http';
 import { getAccessToken } from './spotify-auth';
 
@@ -43,8 +44,6 @@ export class SpotifyApiError extends Error {
     this.name = 'SpotifyApiError';
   }
 }
-
-let sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 async function request<T>(url: string): Promise<T> {
   // Không bao giờ gửi token tới host khác (link `next` lấy từ phản hồi).
@@ -164,9 +163,4 @@ export function getPlaylistTracks(playlistId: string): Promise<SourceTrack[]> {
 /** "Bài hát đã thích", mới thích trước. */
 export function getSavedTracks(): Promise<SourceTrack[]> {
   return collect<RawEntry, SourceTrack>('/me/tracks?limit=50', (e) => toSourceTrack(e?.track ?? e?.item));
-}
-
-/** Chỉ dùng trong test. */
-export function __setSpotifySleepForTests(fn: (ms: number) => Promise<void>) {
-  sleep = fn;
 }

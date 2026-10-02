@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { formatDuration } from '@/lib/format';
 import { seekTo } from '@/player/controller';
+import { useLivePosition } from '@/ui/hooks';
 
 /** Thanh tua: kéo thì chỉ xem trước, thả tay mới tua (tránh gửi hàng loạt lệnh cho native). */
-export function SeekBar({ position, duration }: { position: number; duration: number }) {
+export function SeekBar({ duration }: { duration: number }) {
+  // Vị trí cập nhật ~15 lần/giây: chỉ thanh tua vẽ lại, không phải cả trình phát.
+  const position = useLivePosition();
   const [drag, setDrag] = useState<number>();
   const value = drag ?? position;
   const max = Math.max(duration, 1);

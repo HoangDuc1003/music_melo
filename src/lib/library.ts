@@ -41,9 +41,11 @@ export function useLikedCount(): number {
 
 // ---------- Playlist tự tạo ----------
 
+export const DEFAULT_PLAYLIST_NAME = 'Playlist của tôi';
+
 export async function createPlaylist(name: string, tracks: Track[] = []): Promise<number> {
   const now = Date.now();
-  const trimmed = name.trim() || 'Playlist mới';
+  const trimmed = name.trim() || DEFAULT_PLAYLIST_NAME;
   return db.transaction('rw', db.playlists, db.tracks, async () => {
     await rememberTracks(tracks);
     const id = await db.playlists.add({
@@ -98,7 +100,7 @@ export async function deletePlaylist(playlistId: number) {
 }
 
 /** Playlist mới sửa trước; ảnh bìa mặc định là ảnh bài đầu tiên. */
-export async function listPlaylists(): Promise<PlaylistRow[]> {
+async function listPlaylists(): Promise<PlaylistRow[]> {
   const rows = await db.playlists.orderBy('updatedAt').reverse().toArray();
   const firsts = await db.tracks.bulkGet(rows.map((r) => r.trackIds[0] ?? ''));
   return rows.map((row, i) => ({ ...row, cover: row.cover ?? firsts[i]?.thumbnail }));
@@ -116,8 +118,7 @@ export interface PlaylistWithTracks {
 export async function playlistWithTracks(playlistId: number): Promise<PlaylistWithTracks | undefined> {
   const playlist = await db.playlists.get(playlistId);
   if (!playlist) return undefined;
-  const rows = await db.tracks.bulkGet(playlist.trackIds);
-  return { playlist, tracks: rows.filter((t): t is Track => Boolean(t)) };
+  return { playlist, tracks: await getTracks(playlist.trackIds) };
 }
 
 /** `null` khi playlist đã bị xoá, `undefined` khi đang tải. */
@@ -152,7 +153,7 @@ export async function clearHistory() {
 }
 
 /** Lịch sử chỉ giữ chừng này lượt nghe mới nhất, để IndexedDB không phình mãi. */
-export const MAX_HISTORY = 2000;
+const MAX_HISTORY = 2000;
 
 /** Gọi khi mở app. Trả về số dòng đã xoá. */
 export async function pruneHistory(max = MAX_HISTORY): Promise<number> {

@@ -2,6 +2,7 @@
 // Viết "phòng thủ" (dùng any + kiểm tra từng trường) vì YouTube hay đổi cấu trúc.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { parseDuration } from '@/lib/format';
+import { resizeGoogleImage } from '@/lib/images';
 import type { ArtistRef, Card, CardKind, Shelf, ShelfItem, Track } from './types';
 
 type Node = any;
@@ -18,22 +19,7 @@ export function textOf(value: unknown): string {
   return '';
 }
 
-const GOOGLE_IMAGE = /(^|\.)googleusercontent\.com$/;
-
-/** Ảnh của googleusercontent đổi kích thước bằng hậu tố "=w120-h120-…"; đổi sang ảnh nét hơn. */
-export function upscaleThumbnail(url: string, size = 544): string {
-  if (!url) return url;
-  try {
-    const parsed = new URL(url);
-    if (!GOOGLE_IMAGE.test(parsed.hostname)) return url;
-    const base = url.replace(/=(w\d+-h\d+|s\d+)[^/]*$/, '');
-    return `${base}=w${size}-h${size}-l90-rj`;
-  } catch {
-    return url;
-  }
-}
-
-/** Chọn ảnh lớn nhất trong danh sách thumbnail rồi phóng to nếu là ảnh googleusercontent. */
+/** Chọn ảnh lớn nhất trong danh sách thumbnail rồi phóng to nếu là ảnh của Google. */
 export function bestThumbnail(thumbs: unknown, size = 544): string {
   const list: Node[] = Array.isArray(thumbs)
     ? thumbs
@@ -46,10 +32,10 @@ export function bestThumbnail(thumbs: unknown, size = 544): string {
     if (!best || (t.width ?? 0) * (t.height ?? 0) > (best.width ?? 0) * (best.height ?? 0)) best = t;
   }
   const url: string = best?.url ?? '';
-  return upscaleThumbnail(url.startsWith('//') ? `https:${url}` : url, size);
+  return url && resizeGoogleImage(url.startsWith('//') ? `https:${url}` : url, size);
 }
 
-export function videoThumbnail(videoId: string): string {
+function videoThumbnail(videoId: string): string {
   return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 }
 
@@ -58,6 +44,15 @@ function toArtistRefs(list: unknown): ArtistRef[] {
   return list
     .map((a: Node) => ({ id: a?.channel_id || a?.endpoint?.payload?.browseId || undefined, name: textOf(a?.name) }))
     .filter((a) => a.name);
+}
+
+/** Nghệ sĩ của thẻ bài (MusicTwoRowItem): danh sách nghệ sĩ → tác giả → phần cuối dòng phụ "Bài hát • Nghệ sĩ". */
+function twoRowArtists(node: Node): ArtistRef[] {
+  const artists = toArtistRefs(node.artists);
+  if (artists.length) return artists;
+  if (node.author) return toArtistRefs([node.author]);
+  const subtitle = textOf(node.subtitle);
+  return subtitle ? [{ name: subtitle.split(' • ').pop() ?? '' }] : [];
 }
 
 /** Bỏ VL ở đầu id playlist (browseId "VLPL…" → "PL…"). */
@@ -69,10 +64,6 @@ function durationOf(node: Node): number {
   if (typeof d === 'number') return d;
   if (typeof d.seconds === 'number' && d.seconds > 0) return d.seconds;
   return parseDuration(textOf(d.text ?? d));
-}
-
-function cleanTitle(title: string): string {
-  return title.trim();
 }
 
 /** MusicResponsiveListItem (bài/video) → Track */
@@ -88,7 +79,7 @@ export function trackFromListItem(node: Node, fallback?: Partial<Track>): Track 
   const isVideo = node.item_type === 'video';
   return {
     id,
-    title: cleanTitle(textOf(node.title) || textOf(node.name)),
+    title: (textOf(node.title) || textOf(node.name)).trim(),
     artists,
     album,
     duration: durationOf(node) || fallback?.duration || 0,
@@ -106,7 +97,7 @@ export function trackFromPanelVideo(node: Node): Track | undefined {
   if (!artists.length && node.author) artists = [{ name: textOf(node.author) }];
   return {
     id,
-    title: cleanTitle(textOf(node.title)),
+    title: textOf(node.title).trim(),
     artists,
     album: node.album?.name ? { id: node.album.id, name: textOf(node.album.name) } : undefined,
     duration: durationOf(node),
@@ -122,7 +113,7 @@ function cardKind(itemType: string | undefined): CardKind | undefined {
 }
 
 /** MusicTwoRowItem / MusicResponsiveListItem (album, playlist, nghệ sĩ) → Card */
-export function cardFromNode(node: Node): Card | undefined {
+function cardFromNode(node: Node): Card | undefined {
   const kind = cardKind(node?.item_type);
   const id: string | undefined = node?.id ?? node?.endpoint?.payload?.browseId;
   if (!kind || !id) return undefined;
@@ -156,13 +147,7 @@ export function shelfItemFromNode(node: Node): ShelfItem | undefined {
       track: {
         id,
         title: textOf(node.title),
-        artists: toArtistRefs(node.artists).length
-          ? toArtistRefs(node.artists)
-          : node.author
-            ? toArtistRefs([node.author])
-            : textOf(node.subtitle)
-              ? [{ name: textOf(node.subtitle).split(' • ').pop() ?? '' }]
-              : [],
+        artists: twoRowArtists(node),
         duration: 0,
         thumbnail: bestThumbnail(thumbs) || videoThumbnail(id),
         isVideo: itemType === 'video' || undefined
@@ -197,6 +182,11 @@ export function shelvesFromSections(sections: Node[] | undefined): Shelf[] {
     .filter((s): s is Shelf => Boolean(s));
 }
 
+/** Các bài trong một hàng/danh sách kết quả (bỏ thẻ album, nghệ sĩ…). */
+export function tracksOf(items: readonly ShelfItem[]): Track[] {
+  return items.flatMap((i) => (i.type === 'track' ? [i.track] : []));
+}
+
 export function tracksOfShelf(shelf: Shelf | undefined): Track[] {
-  return (shelf?.items ?? []).flatMap((i) => (i.type === 'track' ? [i.track] : []));
+  return tracksOf(shelf?.items ?? []);
 }

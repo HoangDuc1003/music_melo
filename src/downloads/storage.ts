@@ -5,6 +5,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { FileTransfer } from '@capacitor/file-transfer';
+import { memoAsync } from '@/lib/async';
 import { db } from '@/lib/db';
 import { log } from '@/lib/log';
 import { isNative } from '@/lib/platform';
@@ -45,14 +46,14 @@ export interface DownloadStorage {
   artworkUrl(id: string): Promise<string | undefined>;
   /** Ảnh bìa dùng cho màn hình khoá (native đọc file:// trực tiếp). */
   artworkFileUrl(id: string): Promise<string | undefined>;
-  /** Thông tin các bài có file trên máy (để dựng lại thư viện nếu dữ liệu app bị mất). */
-  listSidecars(): Promise<SidecarInfo[]>;
+  /** Thông tin các bài có file trên máy nhưng không có trong `known` (dựng lại thư viện nếu dữ liệu app bị mất). */
+  listSidecars(known: ReadonlySet<string>): Promise<SidecarInfo[]>;
 }
 
 /** videoId của YouTube: đúng 11 ký tự [A-Za-z0-9_-]. Kiểm tra trước khi dùng làm tên file. */
 export const SAFE_ID = /^[\w-]{11}$/;
 
-export function assertSafeId(id: string) {
+function assertSafeId(id: string) {
   if (!SAFE_ID.test(id)) throw new Error(`id không hợp lệ: ${id.slice(0, 20)}`);
 }
 
@@ -72,18 +73,15 @@ const DIR = Directory.LibraryNoCloud;
 const FOLDER = 'music';
 
 class NativeStorage implements DownloadStorage {
-  private base?: Promise<string>;
   private progressHandlers = new Map<string, (p: DownloadProgress) => void>();
   private listening?: Promise<unknown>;
 
-  private folderUri(): Promise<string> {
-    this.base ??= (async () => {
-      await Filesystem.mkdir({ path: FOLDER, directory: DIR, recursive: true }).catch(() => undefined);
-      const { uri } = await Filesystem.getUri({ path: FOLDER, directory: DIR });
-      return uri.replace(/\/$/, '');
-    })();
-    return this.base;
-  }
+  /** Đường dẫn thư mục nhạc (tạo nếu chưa có); lỗi thì lần sau thử lại. */
+  private folderUri = memoAsync(async () => {
+    await Filesystem.mkdir({ path: FOLDER, directory: DIR, recursive: true }).catch(() => undefined);
+    const { uri } = await Filesystem.getUri({ path: FOLDER, directory: DIR });
+    return uri.replace(/\/$/, '');
+  });
 
   private listen() {
     this.listening ??= FileTransfer.addListener('progress', (p) => {
@@ -173,14 +171,15 @@ class NativeStorage implements DownloadStorage {
     return file ? Capacitor.convertFileSrc(file) : undefined;
   }
 
-  async listSidecars(): Promise<SidecarInfo[]> {
+  async listSidecars(known: ReadonlySet<string>): Promise<SidecarInfo[]> {
     await this.folderUri();
     const { files } = await Filesystem.readdir({ path: FOLDER, directory: DIR });
     const names = new Set(files.map((f) => f.name));
     const result: SidecarInfo[] = [];
     for (const name of names) {
       const id = name.replace(/\.json$/, '');
-      if (!name.endsWith('.json') || !SAFE_ID.test(id) || !names.has(`${id}.m4a`)) continue;
+      // Chỉ đọc file .json của bài chưa có trong DB (mỗi lần đọc là một lượt gọi native).
+      if (!name.endsWith('.json') || known.has(id) || !SAFE_ID.test(id) || !names.has(`${id}.m4a`)) continue;
       try {
         const { data } = await Filesystem.readFile({ path: `${FOLDER}/${name}`, directory: DIR, encoding: Encoding.UTF8 });
         const info = JSON.parse(String(data)) as SidecarInfo;

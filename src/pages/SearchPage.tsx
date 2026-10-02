@@ -5,13 +5,13 @@ import { Artwork } from '@/components/Artwork';
 import { Centered, ErrorState, Page, RootTitle, Spinner } from '@/components/Page';
 import { TrackRow } from '@/components/TrackRow';
 import { clearSearches, recordSearch, removeSearch, useRecentSearches } from '@/lib/library';
-import { log } from '@/lib/log';
 import { playTracks } from '@/player/controller';
 import { useDebounced } from '@/ui/hooks';
 import { navigate, openCard } from '@/ui/nav';
-import { toast } from '@/ui/overlays';
+import { runAction } from '@/ui/overlays';
 import { getSuggestions, getUpNext, parseYouTubeLink, search } from '@/youtube/music';
-import type { Card, SearchType, ShelfItem, Track } from '@/youtube/types';
+import { tracksOf } from '@/youtube/normalize';
+import type { Card, SearchType, ShelfItem } from '@/youtube/types';
 
 const TYPES: { type: SearchType; label: string }[] = [
   { type: 'song', label: 'Bài hát' },
@@ -34,7 +34,7 @@ function CardRow({ card }: { card: Card }) {
 }
 
 function Results({ items, query }: { items: ShelfItem[]; query: string }) {
-  const tracks: Track[] = items.flatMap((i) => (i.type === 'track' ? [i.track] : []));
+  const tracks = tracksOf(items);
   if (!items.length) return <Centered>Không tìm thấy kết quả cho “{query}”.</Centered>;
   return (
     <div className="pt-1">
@@ -53,19 +53,13 @@ function Results({ items, query }: { items: ShelfItem[]; query: string }) {
   );
 }
 
-async function openLink(link: { playlistId?: string; videoId?: string }) {
-  try {
-    if (link.playlistId) return navigate({ name: 'playlist', id: link.playlistId });
-    if (link.videoId) {
-      const tracks = await getUpNext(link.videoId);
-      const start = Math.max(0, tracks.findIndex((t) => t.id === link.videoId));
-      if (!tracks.length) throw new Error('Không mở được link này');
-      await playTracks(tracks, start, { context: { type: 'radio', id: link.videoId, title: tracks[start].title } });
-    }
-  } catch (err) {
-    log.error('search', err);
-    toast(err instanceof Error ? err.message : 'Không mở được link này');
-  }
+async function openLink({ playlistId, videoId }: { playlistId?: string; videoId?: string }) {
+  if (playlistId) return navigate({ name: 'playlist', id: playlistId });
+  if (!videoId) return;
+  const tracks = await getUpNext(videoId);
+  if (!tracks.length) throw new Error('Không mở được link này');
+  const start = Math.max(0, tracks.findIndex((t) => t.id === videoId));
+  await playTracks(tracks, start, { context: { type: 'radio', id: videoId, title: tracks[start].title } });
 }
 
 export function SearchPage() {
@@ -101,6 +95,7 @@ export function SearchPage() {
 
   const showSuggestions = focused && input.trim().length > 0;
   const showRecent = !showSuggestions && !query;
+  const showResults = Boolean(query) && !showSuggestions;
 
   return (
     <Page>
@@ -112,7 +107,7 @@ export function SearchPage() {
           className="flex items-center gap-2 rounded-md bg-white px-3 py-2.5 text-black"
           onSubmit={(e) => {
             e.preventDefault();
-            if (link) return void openLink(link);
+            if (link) return void runAction(() => openLink(link));
             submit(input);
           }}
         >
@@ -127,12 +122,20 @@ export function SearchPage() {
             onChange={(e) => setInput(e.target.value)}
           />
           {input && (
-            <button type="button" aria-label="Xoá" className="shrink-0 p-0.5" onClick={() => (setInput(''), setQuery(''))}>
+            <button
+              type="button"
+              aria-label="Xoá"
+              className="shrink-0 p-0.5"
+              onClick={() => {
+                setInput('');
+                setQuery('');
+              }}
+            >
               <X size={18} />
             </button>
           )}
         </form>
-        {query && !showSuggestions && (
+        {showResults && (
           <div className="no-scrollbar mt-3 flex gap-2 overflow-x-auto">
             {TYPES.map((t) => (
               <button
@@ -148,7 +151,7 @@ export function SearchPage() {
       </div>
 
       {link && (
-        <button className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-white/5" onClick={() => void openLink(link)}>
+        <button className="flex w-full items-center gap-3 px-4 py-3 text-left active:bg-white/5" onClick={() => void runAction(() => openLink(link))}>
           <Link2 className="text-accent" />
           <span className="text-[15px]">{link.playlistId ? 'Mở playlist từ link' : 'Phát bài từ link'}</span>
         </button>
@@ -199,10 +202,10 @@ export function SearchPage() {
         </div>
       )}
 
-      {query && !showSuggestions && (
+      {showResults && (
         <>
           {results.isPending && <Spinner className="mt-10" />}
-          {results.isError && <ErrorState error={new Error('Không tìm được. Kiểm tra kết nối mạng.')} onRetry={() => void results.refetch()} />}
+          {results.isError && <ErrorState message="Không tìm được. Kiểm tra kết nối mạng." onRetry={() => void results.refetch()} />}
           {results.data && <Results items={results.data} query={query} />}
         </>
       )}

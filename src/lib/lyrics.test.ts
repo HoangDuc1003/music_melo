@@ -9,21 +9,10 @@ vi.mock('@/youtube/http', () => ({ appFetch: mocks.appFetch }));
 vi.mock('@/youtube/music', () => ({ getYouTubeLyrics: mocks.getYouTubeLyrics }));
 
 import { db } from './db';
-import { activeLineIndex, cleanArtist, cleanTitle, getLyrics, parseLrc } from './lyrics';
+import { activeLineIndex, getLyrics, parseLrc } from './lyrics';
 
 const track: Track = { id: 'abc', title: 'Lạc Trôi (Official Music Video)', artists: [{ name: 'Sơn Tùng M-TP' }], duration: 233, thumbnail: '' };
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
-
-describe('cleanTitle / cleanArtist', () => {
-  it('bỏ phần thừa trong tên bài YouTube', () => {
-    expect(cleanTitle('Lạc Trôi (Official Music Video)')).toBe('Lạc Trôi');
-    expect(cleanTitle('Hãy Trao Cho Anh [MV] | Sơn Tùng')).toBe('Hãy Trao Cho Anh');
-    expect(cleanTitle('Song ft. Someone')).toBe('Song');
-    expect(cleanTitle('Em Của Ngày Hôm Qua (Lyrics Video)')).toBe('Em Của Ngày Hôm Qua');
-    expect(cleanTitle('Nơi Này Có Anh')).toBe('Nơi Này Có Anh');
-    expect(cleanArtist('Sơn Tùng M-TP - Topic')).toBe('Sơn Tùng M-TP');
-  });
-});
 
 describe('parseLrc', () => {
   it('đọc mốc thời gian, nhiều mốc trên một dòng, offset', () => {

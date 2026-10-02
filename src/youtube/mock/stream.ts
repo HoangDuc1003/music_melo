@@ -48,7 +48,7 @@ function toneWav(seed: string): string {
   return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 }
 
-export function isFresh(audio: ResolvedAudio | undefined): audio is ResolvedAudio {
+function isFresh(audio: ResolvedAudio | undefined): audio is ResolvedAudio {
   return Boolean(audio && audio.expiresAt > Date.now());
 }
 
@@ -57,9 +57,8 @@ export function getCachedAudio(videoId: string): ResolvedAudio | undefined {
   return isFresh(audio) ? audio : undefined;
 }
 
-export function clearAudioCache(videoId?: string) {
-  if (videoId) cache.delete(videoId);
-  else cache.clear();
+export function clearAudioCache() {
+  cache.clear();
 }
 
 export async function resolveAudio(videoId: string, options: { refresh?: boolean } = {}): Promise<ResolvedAudio> {

@@ -84,6 +84,3 @@ export async function getPoTokens(videoId: string) {
   return { visitorData: s.visitorData, sessionToken: s.sessionToken, contentToken };
 }
 
-export function resetPoTokens() {
-  state = undefined;
-}

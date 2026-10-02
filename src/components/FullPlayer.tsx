@@ -6,8 +6,6 @@ import {
   ListMusic,
   MicVocal,
   MoonStar,
-  Pause,
-  Play,
   Repeat,
   Repeat1,
   Shuffle,
@@ -15,18 +13,21 @@ import {
   SkipForward
 } from 'lucide-react';
 import { joinArtists } from '@/lib/format';
-import { toggleLike, useIsLiked } from '@/lib/library';
+import { useIsLiked } from '@/lib/library';
 import { cycleRepeat, next, previous, togglePlay, toggleShuffle } from '@/player/controller';
+import type { RepeatMode } from 'capacitor-melo-player';
+import type { PlayContext } from '@/player/queue';
 import { currentEntry, usePlayer } from '@/player/store';
-import { useArtworkColor, useLivePosition } from '@/ui/hooks';
+import { useArtworkColor, useSlideIn } from '@/ui/hooks';
 import { navigate } from '@/ui/nav';
-import { closePlayer, openSleepTimer, openTrackMenu, setPanel, toast, useOverlays } from '@/ui/overlays';
-import { Artwork } from './Artwork';
+import { closePlayer, openSleepTimer, openTrackMenu, setPanel, toggleLikeWithToast, useOverlays } from '@/ui/overlays';
+import { TrackArtwork } from './TrackArtwork';
 import { LyricsPanel } from './LyricsPanel';
+import { PlayPauseIcon } from './PlayPauseIcon';
 import { QueueSheet } from './QueueSheet';
 import { SeekBar } from './SeekBar';
 
-const CONTEXT_LABEL: Record<string, string> = {
+const CONTEXT_LABEL: Record<PlayContext['type'], string> = {
   album: 'Đang phát từ album',
   playlist: 'Đang phát từ playlist',
   artist: 'Đang phát từ nghệ sĩ',
@@ -35,6 +36,8 @@ const CONTEXT_LABEL: Record<string, string> = {
   radio: 'Đang phát radio',
   other: 'Đang phát'
 };
+
+const REPEAT_LABEL: Record<RepeatMode, string> = { off: 'Không lặp', all: 'Lặp tất cả', one: 'Lặp một bài' };
 
 /** Trình phát toàn màn hình: vuốt xuống để đóng, nền theo màu ảnh bìa. */
 export function FullPlayer() {
@@ -48,27 +51,13 @@ export function FullPlayer() {
   const repeat = usePlayer((s) => s.repeat);
   const context = usePlayer((s) => s.context);
   const sleepActive = usePlayer((s) => Boolean(s.sleepTimerEndsAt || s.sleepAtEndOfItem));
-  const position = useLivePosition(open);
   const liked = useIsLiked(entry?.track.id);
   const color = useArtworkColor(entry?.track.thumbnail, entry?.track.id);
 
-  const [mounted, setMounted] = useState(open);
-  const [shown, setShown] = useState(false);
   const [drag, setDrag] = useState(0);
   const [dragging, setDragging] = useState(false);
   const start = useRef<{ y: number; x: number; t: number } | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setMounted(true);
-      setDrag(0);
-      const frame = requestAnimationFrame(() => requestAnimationFrame(() => setShown(true)));
-      return () => cancelAnimationFrame(frame);
-    }
-    setShown(false);
-    const timer = setTimeout(() => setMounted(false), 320);
-    return () => clearTimeout(timer);
-  }, [open]);
+  const { mounted, shown } = useSlideIn(open, 320, () => setDrag(0));
 
   // Hết hàng chờ (xoá hết bài) thì đóng.
   useEffect(() => {
@@ -141,11 +130,11 @@ export function FullPlayer() {
 
       <div className="min-h-0 flex-1 px-6">
         {panel === 'lyrics' ? (
-          <LyricsPanel track={track} position={position} />
+          <LyricsPanel track={track} />
         ) : (
           <div className="flex h-full touch-none items-center justify-center" {...dragHandlers}>
-            <Artwork
-              src={track.thumbnail}
+            <TrackArtwork
+              track={track}
               eager
               className={`aspect-square w-full max-w-[min(100%,52vh)] shadow-2xl transition-transform duration-500 ${playing ? 'scale-100' : 'scale-[0.88]'}`}
             />
@@ -164,14 +153,14 @@ export function FullPlayer() {
           <button
             className="p-2 active:scale-90"
             aria-label={liked ? 'Bỏ thích' : 'Thích'}
-            onClick={() => void toggleLike(track).then((v) => toast(v ? 'Đã thêm vào Bài hát đã thích' : 'Đã bỏ thích'))}
+            onClick={() => void toggleLikeWithToast(track)}
           >
             <Heart size={26} className={liked ? 'fill-accent text-accent' : ''} />
           </button>
         </div>
 
         <div className="mt-3">
-          <SeekBar position={position} duration={duration} />
+          <SeekBar duration={duration} />
         </div>
 
         <div className="mt-2 flex items-center justify-between">
@@ -186,20 +175,14 @@ export function FullPlayer() {
             aria-label={playing ? 'Tạm dừng' : 'Phát'}
             onClick={() => void togglePlay()}
           >
-            {buffering && playing ? (
-              <span className="size-7 animate-spin rounded-full border-[3px] border-black/20 border-t-black" />
-            ) : playing ? (
-              <Pause size={32} fill="black" strokeWidth={0} />
-            ) : (
-              <Play size={32} fill="black" strokeWidth={0} className="ml-1" />
-            )}
+            <PlayPauseIcon playing={playing} buffering={buffering} size={32} dark />
           </button>
           <button className="p-2 active:scale-90" aria-label="Bài sau" onClick={() => void next()}>
             <SkipForward size={34} fill="white" />
           </button>
           <button
             className={`p-2 active:scale-90 ${repeat !== 'off' ? 'text-accent' : ''}`}
-            aria-label={repeat === 'one' ? 'Lặp một bài' : repeat === 'all' ? 'Lặp tất cả' : 'Không lặp'}
+            aria-label={REPEAT_LABEL[repeat]}
             onClick={() => void cycleRepeat()}
           >
             {repeat === 'one' ? <Repeat1 size={24} /> : <Repeat size={24} />}

@@ -19,7 +19,7 @@ export interface PlayContext {
 }
 
 let uidCounter = 0;
-export function newUid(): string {
+function newUid(): string {
   uidCounter += 1;
   return `${Date.now().toString(36)}-${uidCounter.toString(36)}`;
 }
@@ -39,17 +39,63 @@ export function shuffleKeepingCurrent<T>(items: readonly T[], currentIndex: numb
   return current === undefined ? rest : [current, ...rest];
 }
 
+export type InsertMode = 'next' | 'queue' | 'radio';
+
 /**
  * Vị trí chèn kiểu Spotify:
  * - 'next' (Phát tiếp): ngay sau bài đang phát.
  * - 'queue' (Thêm vào hàng chờ): sau bài đang phát và các bài người dùng đã thêm trước đó,
  *   trước phần còn lại của album/playlist và radio.
+ * - 'radio': cuối hàng chờ.
  */
-export function insertPosition(entries: readonly QueueEntry[], index: number, mode: 'next' | 'queue'): number {
+export function insertPosition(entries: readonly { origin?: EntryOrigin }[], index: number, mode: InsertMode): number {
+  if (mode === 'radio') return entries.length;
   if (mode === 'next' || index < 0) return Math.max(0, index + 1);
   let i = index + 1;
   while (i < entries.length && entries[i].origin === 'queue') i++;
   return i;
+}
+
+/** Đang trộn bài: chèn bài mới vào thứ tự gốc theo cùng quy tắc, để tắt trộn bài thì bài vẫn ở đúng chỗ. */
+export function insertIntoOriginalOrder(
+  order: readonly string[],
+  entries: readonly QueueEntry[],
+  currentUid: string | undefined,
+  added: readonly QueueEntry[],
+  mode: InsertMode
+): string[] {
+  const at = currentUid === undefined ? -1 : order.indexOf(currentUid);
+  const origin = new Map(entries.map((e) => [e.uid, e.origin]));
+  const position = at < 0 ? order.length : insertPosition(order.map((uid) => ({ origin: origin.get(uid) })), at, mode);
+  return [...order.slice(0, position), ...added.map((e) => e.uid), ...order.slice(position)];
+}
+
+/** Chỉ số bài đang phát sau khi chèn `count` bài vào vị trí `at`. */
+export function indexAfterInsert(index: number, at: number, count: number): number {
+  return index >= 0 && at <= index ? index + count : index;
+}
+
+/** Chỉ số bài đang phát sau khi xoá bài ở `at` (còn lại `length` bài). */
+export function indexAfterRemove(index: number, at: number, length: number): number {
+  if (at < index) return index - 1;
+  if (at === index && index >= length) return length - 1;
+  return index;
+}
+
+/** Chỉ số bài đang phát sau khi kéo bài từ `from` tới `to`. */
+export function indexAfterMove(index: number, from: number, to: number): number {
+  if (index === from) return to;
+  if (from < index && to >= index) return index - 1;
+  if (from > index && to <= index) return index + 1;
+  return index;
+}
+
+/** Tắt trộn bài: về thứ tự gốc; bài thêm vào mà thiếu trong thứ tự gốc thì giữ ở cuối. */
+export function unshuffle(entries: readonly QueueEntry[], originalOrder: readonly string[]): QueueEntry[] {
+  const byUid = new Map(entries.map((e) => [e.uid, e]));
+  const known = new Set(originalOrder);
+  const ordered = originalOrder.map((uid) => byUid.get(uid)).filter((e): e is QueueEntry => Boolean(e));
+  return [...ordered, ...entries.filter((e) => !known.has(e.uid))];
 }
 
 /** Các chỉ số cần chuẩn bị link: bài hiện tại và `ahead` bài sau (vòng lại đầu nếu lặp cả danh sách). */

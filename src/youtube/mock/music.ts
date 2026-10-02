@@ -1,11 +1,12 @@
 // Bản giả của src/youtube/music.ts cho `npm run dev:mock`.
+import { fold } from '@/lib/text';
 import type { AlbumPage, ArtistPage, PlaylistPage, SearchSuggestions, SearchType, Shelf, ShelfItem, Track } from '../types';
 import { album, ALBUM_CARDS, ARTIST_CARDS, artist, HOME, playlist, PLAYLIST_CARDS, TRACKS } from './fixtures';
 
 export { parseYouTubeLink } from '../links';
 
 const delay = <T>(value: T, ms = 350) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
-const fold = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/đ/g, 'd').toLowerCase();
+
 
 export function getHome(): Promise<Shelf[]> {
   return delay(HOME, 600);

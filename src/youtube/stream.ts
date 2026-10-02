@@ -41,6 +41,8 @@ export class StreamError extends Error {
 
 const cache = new Map<string, ResolvedAudio>();
 const inflight = new Map<string, Promise<ResolvedAudio>>();
+/** Tăng mỗi lần xoá cache: lượt lấy link bắt đầu trước đó (gắn IP cũ) không được ghi vào cache nữa. */
+let epoch = 0;
 
 function orderedClients(): ClientSpec[] {
   const preferred = localStorage.getItem(PREFERRED_KEY);
@@ -48,7 +50,7 @@ function orderedClients(): ClientSpec[] {
   return first ? [first, ...CLIENTS.filter((c) => c !== first)] : CLIENTS;
 }
 
-export function isFresh(audio: ResolvedAudio | undefined, marginMs = EXPIRY_MARGIN_MS): audio is ResolvedAudio {
+function isFresh(audio: ResolvedAudio | undefined, marginMs = EXPIRY_MARGIN_MS): audio is ResolvedAudio {
   return Boolean(audio && audio.expiresAt - Date.now() > marginMs);
 }
 
@@ -58,9 +60,10 @@ export function getCachedAudio(videoId: string): ResolvedAudio | undefined {
 }
 
 /** Xoá link đã nhớ (khi đổi mạng Wi-Fi ↔ 4G link cũ gắn IP cũ sẽ hỏng). */
-export function clearAudioCache(videoId?: string) {
-  if (videoId) cache.delete(videoId);
-  else cache.clear();
+export function clearAudioCache() {
+  epoch += 1;
+  cache.clear();
+  inflight.clear();
 }
 
 export function resolveAudio(videoId: string, options: { refresh?: boolean } = {}): Promise<ResolvedAudio> {
@@ -69,19 +72,24 @@ export function resolveAudio(videoId: string, options: { refresh?: boolean } = {
   if (cached) return Promise.resolve(cached);
   let pending = inflight.get(videoId);
   if (!pending) {
-    pending = doResolve(videoId).finally(() => inflight.delete(videoId));
-    inflight.set(videoId, pending);
+    const started = doResolve(videoId, epoch).finally(() => {
+      if (inflight.get(videoId) === started) inflight.delete(videoId);
+    });
+    inflight.set(videoId, started);
+    pending = started;
   }
   return pending;
 }
 
-async function doResolve(videoId: string): Promise<ResolvedAudio> {
+async function doResolve(videoId: string, startedEpoch: number): Promise<ResolvedAudio> {
   const started = performance.now();
   let lastError: StreamError | undefined;
   for (const client of orderedClients()) {
     try {
       const audio = await tryClient(videoId, client);
       if (audio) {
+        // Mạng đổi trong lúc chờ: link này gắn IP cũ, lấy lại theo mạng mới.
+        if (startedEpoch !== epoch) return resolveAudio(videoId);
         cache.set(videoId, audio);
         localStorage.setItem(PREFERRED_KEY, client.name);
         log.info('stream', `${videoId} via ${client.name} in ${Math.round(performance.now() - started)}ms`);

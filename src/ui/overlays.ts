@@ -1,5 +1,7 @@
 // Các lớp phủ dùng chung: trình phát toàn màn hình, hàng chờ, lời bài hát, menu của bài, chọn playlist, thông báo.
 import { create } from 'zustand';
+import { toggleLike } from '@/lib/library';
+import { errorMessage, log } from '@/lib/log';
 import type { Track } from '@/youtube/types';
 
 export type PlayerPanel = 'none' | 'queue' | 'lyrics';
@@ -53,4 +55,34 @@ export function toast(message: string) {
   const id = ++toastId;
   useOverlays.setState((s) => ({ toasts: [...s.toasts.slice(-2), { id, message }] }));
   setTimeout(() => useOverlays.setState((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), TOAST_MS);
+}
+
+/** Chạy thao tác người dùng bấm: xong thì báo `done`; lỗi thì ghi nhật ký và báo lỗi (không bao giờ im lặng). */
+export function runAction(action: () => unknown, done?: string): Promise<void> {
+  return Promise.resolve()
+    .then(action)
+    .then(() => {
+      if (done) toast(done);
+    })
+    .catch((err) => {
+      log.error('ui', err);
+      toast(errorMessage(err, 'Có lỗi xảy ra'));
+    });
+}
+
+/** Hỏi lại trước thao tác khó hoàn tác (xoá…), đồng ý thì `runAction`. */
+export function confirmAction(question: string, action: () => unknown, done?: string) {
+  if (window.confirm(question)) void runAction(action, done);
+}
+
+/** Thích / bỏ thích một bài, báo kết quả. */
+export function toggleLikeWithToast(track: Track): Promise<void> {
+  return runAction(async () => toast((await toggleLike(track)) ? 'Đã thêm vào Bài hát đã thích' : 'Đã bỏ thích'));
+}
+
+export function copyText(text: string, done: string, failed = 'Không copy được') {
+  navigator.clipboard.writeText(text).then(
+    () => toast(done),
+    () => toast(failed)
+  );
 }

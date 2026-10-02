@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { activeLineIndex, getLyrics } from '@/lib/lyrics';
 import { seekTo } from '@/player/controller';
-import type { Track } from '@/youtube/types';
+import { useLivePosition } from '@/ui/hooks';
+import type { LyricsLine, Track } from '@/youtube/types';
 import { Spinner } from './Page';
 
 /** Lời bài hát: dòng đang hát sáng lên và tự cuộn vào giữa; chạm một dòng để tua tới đó. */
-export function LyricsPanel({ track, position }: { track: Track; position: number }) {
+export function LyricsPanel({ track }: { track: Track }) {
+  const position = useLivePosition();
   const query = useQuery({
     queryKey: ['lyrics', track.id],
     queryFn: async () => (await getLyrics(track)) ?? null,
@@ -35,18 +37,7 @@ export function LyricsPanel({ track, position }: { track: Track; position: numbe
       onWheel={() => (userScrolledAt.current = Date.now())}
     >
       {lines ? (
-        lines.map((line, i) => (
-          <button
-            key={i}
-            data-line={i}
-            className={`block w-full py-1.5 text-left text-[22px] font-bold leading-snug transition-colors duration-300 ${
-              i === active ? 'text-white' : i < active ? 'text-white/45' : 'text-black/45'
-            }`}
-            onClick={() => void seekTo(line.time)}
-          >
-            {line.text || '♪'}
-          </button>
-        ))
+        <SyncedLines lines={lines} active={active} />
       ) : (
         <p className="whitespace-pre-line text-[19px] font-bold leading-relaxed">{query.data.plain}</p>
       )}
@@ -54,3 +45,19 @@ export function LyricsPanel({ track, position }: { track: Track; position: numbe
     </div>
   );
 }
+
+/** Các dòng lời chỉ vẽ lại khi chuyển sang dòng mới (không phải mỗi khung hình). */
+const SyncedLines = memo(function SyncedLines({ lines, active }: { lines: LyricsLine[]; active: number }) {
+  return lines.map((line, i) => (
+    <button
+      key={i}
+      data-line={i}
+      className={`block w-full py-1.5 text-left text-[22px] font-bold leading-snug transition-colors duration-300 ${
+        i === active ? 'text-white' : i < active ? 'text-white/45' : 'text-black/45'
+      }`}
+      onClick={() => void seekTo(line.time)}
+    >
+      {line.text || '♪'}
+    </button>
+  ));
+});

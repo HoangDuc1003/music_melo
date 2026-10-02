@@ -87,15 +87,33 @@ export function Centered({ children }: { children: ReactNode }) {
   return <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 px-8 text-center text-subdued">{children}</div>;
 }
 
-export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
+export function ErrorState({ message, onRetry }: { message: string; onRetry?: () => void }) {
   return (
     <Centered>
-      <p>{error instanceof Error ? error.message : 'Có lỗi xảy ra'}</p>
+      <p>{message}</p>
       {onRetry && (
         <button className="rounded-full border border-white/40 px-5 py-2 text-sm font-semibold text-white active:scale-95" onClick={onRetry}>
           Thử lại
         </button>
       )}
     </Centered>
+  );
+}
+
+/** Cả trang đang tải. */
+export function PageLoading() {
+  return (
+    <Page>
+      <Spinner className="mt-40" />
+    </Page>
+  );
+}
+
+/** Cả trang không tải được (thường do mất mạng). */
+export function PageError({ message = 'Không tải được. Kiểm tra kết nối mạng.', onRetry }: { message?: string; onRetry: () => void }) {
+  return (
+    <Page solidHeader>
+      <ErrorState message={message} onRetry={onRetry} />
+    </Page>
   );
 }

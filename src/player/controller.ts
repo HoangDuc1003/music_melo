@@ -1,7 +1,6 @@
 // Nối giao diện ↔ plugin MeloPlayer (native giữ hàng chờ và tự chuyển bài khi khoá máy).
 // JS lo phần cần mạng: lấy sẵn link cho ~20 bài tới, xin link mới khi native báo `needsUrl`,
 // nối radio khi sắp hết bài, lưu hàng chờ để mở app là nghe tiếp, ghi lịch sử.
-import { Network } from '@capacitor/network';
 import {
   MeloPlayer,
   type NeedsUrlEvent,
@@ -10,29 +9,36 @@ import {
   type PlayerState,
   type RepeatMode
 } from 'capacitor-melo-player';
+import { sleep } from '@/lib/async';
 import { db, rememberTracks } from '@/lib/db';
 import { joinArtists } from '@/lib/format';
-import { log } from '@/lib/log';
-import { isOnline, setNetworkStatus } from '@/lib/network';
+import { errorMessage, log } from '@/lib/log';
+import { isOnline, setNetworkStatus, useNetwork } from '@/lib/network';
 import { getUpNext } from '@/youtube/music';
-import { clearAudioCache, getCachedAudio, resolveAudio, StreamError } from '@/youtube/stream';
+import { clearAudioCache, getCachedAudio, resolveAudio } from '@/youtube/stream';
 import type { Track } from '@/youtube/types';
 import {
   freshRadioTracks,
+  indexAfterInsert,
+  indexAfterMove,
+  indexAfterRemove,
+  insertIntoOriginalOrder,
   insertPosition,
   makeEntries,
   parseSnapshot,
   serializeSnapshot,
   shouldAppendRadio,
   shuffleKeepingCurrent,
+  unshuffle,
   upcomingIndices,
+  type InsertMode,
   type PlayContext,
   type QueueEntry
 } from './queue';
 import { currentEntry, initialPlayerState, usePlayer, type PlayerStore } from './store';
 
 /** Link sống ~6 giờ: chuẩn bị sẵn 20 bài ≈ 1–1,5 giờ nghe khi khoá máy. */
-export const PRERESOLVE_AHEAD = 20;
+const PRERESOLVE_AHEAD = 20;
 /** 3 bài tới chuẩn bị ngay, các bài sau giãn ra để YouTube không chặn. */
 const PRERESOLVE_URGENT = 3;
 const PRERESOLVE_GAP_MS = 1500;
@@ -57,16 +63,16 @@ export function setArtworkFileProvider(provider: FileUrlProvider) {
 const sentUrls = new Map<string, string>();
 const localFiles = new Set<string>();
 let resolveGeneration = 0;
-let radioBusy = false;
+/** Lượt nối radio đang chạy (người gọi sau đợi chung kết quả, không chạy lượt thứ hai). */
+let radioInFlight: Promise<boolean> | undefined;
 let radioFailedSeed: string | undefined;
 let lastHistory: { id: string; at: number } | undefined;
 let lastSnapshotAt = 0;
 let snapshotTimer: ReturnType<typeof setTimeout> | undefined;
-let lastConnectionType: string | undefined;
 /** Số bài liên tiếp không lấy được link (để không chuyển bài mãi khi mất mạng). */
 let consecutiveResolveFailures = 0;
 let initialized: Promise<void> | undefined;
-let sleepFn: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let unwatchNetwork: (() => void) | undefined;
 
 function set(partial: Partial<PlayerStore>) {
   usePlayer.setState(partial);
@@ -84,19 +90,19 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
   return run;
 }
 
-function errorMessage(err: unknown): string {
-  if (err instanceof StreamError) return err.message;
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
-
 // ---------- Chuyển Track → PlayerItem ----------
 
+/** File đã tải của bài (nếu có); ghi nhớ để không lấy link YouTube cho bài này. */
+async function lookupLocalFile(trackId: string): Promise<string | undefined> {
+  const fileUrl = await fileUrlProvider(trackId).catch(() => undefined);
+  if (fileUrl) localFiles.add(trackId);
+  else localFiles.delete(trackId);
+  return fileUrl;
+}
+
 async function toItem(track: Track): Promise<PlayerItem> {
-  const fileUrl = await fileUrlProvider(track.id).catch(() => undefined);
+  const fileUrl = await lookupLocalFile(track.id);
   const localArt = fileUrl ? await artworkFileProvider(track.id).catch(() => undefined) : undefined;
-  if (fileUrl) localFiles.add(track.id);
-  else localFiles.delete(track.id);
   const cached = getCachedAudio(track.id);
   if (cached) sentUrls.set(track.id, cached.url);
   return {
@@ -127,7 +133,7 @@ async function sendUrl(trackId: string, options: { refresh?: boolean; force?: bo
 }
 
 /** Chuẩn bị link cho bài hiện tại và PRERESOLVE_AHEAD bài sau. Lần gọi mới huỷ vòng cũ. */
-export function ensureUpcomingUrls(): Promise<void> {
+function ensureUpcomingUrls(): Promise<void> {
   const generation = ++resolveGeneration;
   return (async () => {
     const { entries, index, repeat } = usePlayer.getState();
@@ -142,7 +148,7 @@ export function ensureUpcomingUrls(): Promise<void> {
       if (localFiles.has(id)) continue;
       const cached = getCachedAudio(id);
       if (cached && sentUrls.get(id) === cached.url) continue;
-      if (count >= PRERESOLVE_URGENT) await sleepFn(PRERESOLVE_GAP_MS);
+      if (count >= PRERESOLVE_URGENT) await sleep(PRERESOLVE_GAP_MS);
       if (generation !== resolveGeneration) return;
       count += 1;
       try {
@@ -223,14 +229,18 @@ async function onQueueEnded() {
 
 // ---------- Radio ----------
 
-/** Còn ≤3 bài thì nối radio (YouTube Music automix) từ bài cuối hàng chờ. */
-export async function maybeAppendRadio(): Promise<boolean> {
+/** Còn ≤3 bài thì nối radio (YouTube Music automix) từ bài cuối hàng chờ. Trả về true nếu đã nối thêm bài. */
+function maybeAppendRadio(): Promise<boolean> {
+  radioInFlight ??= appendRadio().finally(() => (radioInFlight = undefined));
+  return radioInFlight;
+}
+
+async function appendRadio(): Promise<boolean> {
   const { entries, index, repeat, autoplay } = usePlayer.getState();
-  if (!autoplay || radioBusy || !isOnline() || !shouldAppendRadio(entries.length, index, repeat)) return false;
+  if (!autoplay || !isOnline() || !shouldAppendRadio(entries.length, index, repeat)) return false;
   const last = entries[entries.length - 1];
   const seed = last.track;
   if (radioFailedSeed === seed.id) return false;
-  radioBusy = true;
   try {
     const tracks = freshRadioTracks(await getUpNext(seed.id), entries.map((e) => e.track));
     if (!tracks.length) {
@@ -251,8 +261,6 @@ export async function maybeAppendRadio(): Promise<boolean> {
     radioFailedSeed = seed.id;
     log.warn('player', 'nối radio lỗi:', errorMessage(err));
     return false;
-  } finally {
-    radioBusy = false;
   }
 }
 
@@ -313,19 +321,10 @@ async function replaceQueue(entries: QueueEntry[], startIndex: number, options: 
   });
 }
 
-type InsertMode = 'next' | 'queue' | 'radio';
-
-/** Vị trí trong thứ tự gốc (khi đang trộn bài) cho bài mới thêm, theo cùng quy tắc với hàng chờ hiện tại. */
-function originalInsertIndex(state: PlayerStore, mode: InsertMode): number {
-  const order = state.originalOrder ?? [];
-  const current = currentEntry(state);
-  const at = current ? order.indexOf(current.uid) : -1;
-  if (mode === 'radio' || at < 0) return order.length;
-  if (mode === 'next') return at + 1;
-  const origins = new Map(state.entries.map((e) => [e.uid, e.origin]));
-  let i = at + 1;
-  while (i < order.length && origins.get(order[i]) === 'queue') i++;
-  return i;
+/** Sau mỗi thay đổi hàng chờ: lưu lại và chuẩn bị link cho các bài tới. */
+function afterQueueChange() {
+  saveSnapshot();
+  void ensureUpcomingUrls();
 }
 
 /** Chạy trong khoá. Vị trí tính từ trạng thái mới nhất, sau khi đã chuẩn bị xong item (bước có `await`). */
@@ -333,21 +332,16 @@ async function insertEntries(newEntries: QueueEntry[], mode: InsertMode) {
   if (!newEntries.length) return;
   const items = await toItems(newEntries);
   const state = usePlayer.getState();
-  const position = mode === 'radio' ? state.entries.length : insertPosition(state.entries, state.index, mode);
-  const entries = [...state.entries.slice(0, position), ...newEntries, ...state.entries.slice(position)];
-  const index = state.index >= 0 && position <= state.index ? state.index + newEntries.length : state.index;
-  let originalOrder = state.originalOrder;
-  if (originalOrder) {
-    const insertAt = originalInsertIndex(state, mode);
-    originalOrder = [...originalOrder.slice(0, insertAt), ...newEntries.map((e) => e.uid), ...originalOrder.slice(insertAt)];
-  }
-  set({ entries, index, originalOrder });
+  const position = insertPosition(state.entries, state.index, mode);
+  set({
+    entries: [...state.entries.slice(0, position), ...newEntries, ...state.entries.slice(position)],
+    index: indexAfterInsert(state.index, position, newEntries.length),
+    originalOrder: state.originalOrder && insertIntoOriginalOrder(state.originalOrder, state.entries, currentEntry(state)?.uid, newEntries, mode)
+  });
   await MeloPlayer.addItems({ items, index: position });
-  saveSnapshot();
-  void ensureUpcomingUrls();
+  afterQueueChange();
 }
 
-/** Phát danh sách bài (album, playlist, kết quả tìm kiếm…) từ `startIndex`. */
 /** Không có mạng: chỉ giữ các bài đã tải. Bài được chọn chưa tải thì không phát gì. */
 async function offlinePlayable(tracks: Track[], startIndex: number): Promise<{ tracks: Track[]; startIndex: number; error?: string }> {
   const available = await Promise.all(tracks.map(async (t) => Boolean(await fileUrlProvider(t.id).catch(() => undefined))));
@@ -358,14 +352,16 @@ async function offlinePlayable(tracks: Track[], startIndex: number): Promise<{ t
 
 type PlayOptions = { context?: PlayContext; shuffle?: boolean };
 
+/** Phát danh sách bài (album, playlist, kết quả tìm kiếm…) từ `startIndex`. */
 export function playTracks(tracks: Track[], startIndex = 0, options: PlayOptions = {}): Promise<void> {
   return exclusive(() => playTracksLocked(tracks, startIndex, options));
 }
 
 async function playTracksLocked(tracks: Track[], startIndex: number, options: PlayOptions) {
   if (!tracks.length) return;
+  startIndex = Math.min(Math.max(startIndex, 0), tracks.length - 1);
   if (!isOnline()) {
-    const playable = await offlinePlayable(tracks, Math.min(Math.max(startIndex, 0), tracks.length - 1));
+    const playable = await offlinePlayable(tracks, startIndex);
     if (playable.error) {
       set({ error: playable.error });
       return;
@@ -374,7 +370,7 @@ async function playTracksLocked(tracks: Track[], startIndex: number, options: Pl
   }
   const shuffle = options.shuffle ?? usePlayer.getState().shuffle;
   let entries = makeEntries(tracks);
-  let index = Math.min(Math.max(startIndex, 0), entries.length - 1);
+  let index = startIndex;
   let originalOrder: string[] | undefined;
   if (shuffle) {
     originalOrder = entries.map((e) => e.uid);
@@ -385,8 +381,7 @@ async function playTracksLocked(tracks: Track[], startIndex: number, options: Pl
   set({ entries, index, shuffle, originalOrder, context: options.context, position: 0, positionAt: Date.now(), error: undefined });
   void rememberTracks(tracks).catch(() => undefined);
   await replaceQueue(entries, index);
-  saveSnapshot();
-  void ensureUpcomingUrls();
+  afterQueueChange();
   void maybeAppendRadio();
 }
 
@@ -417,41 +412,31 @@ function resolvePosition(entries: readonly QueueEntry[], position: number, uid?:
 export function removeAt(position: number, uid?: string): Promise<void> {
   return exclusive(async () => {
     const state = usePlayer.getState();
-    position = resolvePosition(state.entries, position, uid);
-    const removed = state.entries[position];
+    const at = resolvePosition(state.entries, position, uid);
+    const removed = state.entries[at];
     if (!removed) return;
-    const entries = state.entries.filter((_, i) => i !== position);
-    let index = state.index;
-    if (position < index) index -= 1;
-    else if (position === index && index >= entries.length) index = entries.length - 1;
-    set({ entries, index, originalOrder: state.originalOrder?.filter((u) => u !== removed.uid) });
-    await MeloPlayer.removeItem({ index: position });
-    saveSnapshot();
-    void ensureUpcomingUrls();
+    const entries = state.entries.filter((_, i) => i !== at);
+    set({ entries, index: indexAfterRemove(state.index, at, entries.length), originalOrder: state.originalOrder?.filter((u) => u !== removed.uid) });
+    await MeloPlayer.removeItem({ index: at });
+    afterQueueChange();
   });
 }
 
 /** `uid`: bài đang kéo; hàng chờ đổi trước khi lệnh chạy thì dời cả `to` theo. */
 export function move(from: number, to: number, uid?: string): Promise<void> {
   return exclusive(async () => {
-    const state = usePlayer.getState();
-    const { entries } = state;
-    const resolved = resolvePosition(entries, from, uid);
-    if (resolved < 0) return;
-    to = Math.min(Math.max(to + resolved - from, 0), entries.length - 1);
-    from = resolved;
-    if (from === to || from >= entries.length) return;
+    const { entries, index } = usePlayer.getState();
+    const source = resolvePosition(entries, from, uid);
+    if (source < 0 || source >= entries.length) return;
+    // Bài đã dời chỗ (lệnh trước đổi hàng chờ): đích dời theo cùng khoảng.
+    const target = Math.min(Math.max(to + source - from, 0), entries.length - 1);
+    if (source === target) return;
     const next = [...entries];
-    const [moved] = next.splice(from, 1);
-    next.splice(to, 0, moved);
-    let index = state.index;
-    if (index === from) index = to;
-    else if (from < index && to >= index) index -= 1;
-    else if (from > index && to <= index) index += 1;
-    set({ entries: next, index });
-    await MeloPlayer.moveItem({ from, to });
-    saveSnapshot();
-    void ensureUpcomingUrls();
+    const [moved] = next.splice(source, 1);
+    next.splice(target, 0, moved);
+    set({ entries: next, index: indexAfterMove(index, source, target) });
+    await MeloPlayer.moveItem({ from: source, to: target });
+    afterQueueChange();
   });
 }
 
@@ -463,24 +448,13 @@ export function toggleShuffle(): Promise<void> {
       set({ shuffle: !state.shuffle });
       return;
     }
-    let entries: QueueEntry[];
-    let originalOrder: string[] | undefined;
-    if (state.shuffle && state.originalOrder) {
-      const byUid = new Map(state.entries.map((e) => [e.uid, e]));
-      entries = state.originalOrder.map((uid) => byUid.get(uid)).filter((e): e is QueueEntry => Boolean(e));
-      // Bài thêm vào mà thiếu trong thứ tự gốc thì giữ ở cuối.
-      const known = new Set(state.originalOrder);
-      entries.push(...state.entries.filter((e) => !known.has(e.uid)));
-      originalOrder = undefined;
-    } else {
-      originalOrder = state.entries.map((e) => e.uid);
-      entries = shuffleKeepingCurrent(state.entries, state.index);
-    }
+    const turningOff = state.shuffle && state.originalOrder;
+    const entries = turningOff ? unshuffle(state.entries, state.originalOrder!) : shuffleKeepingCurrent(state.entries, state.index);
+    const originalOrder = turningOff ? undefined : state.entries.map((e) => e.uid);
     const index = entries.findIndex((e) => e.uid === current.uid);
     set({ entries, index, shuffle: !state.shuffle, originalOrder });
     await replaceQueue(entries, index, { keepCurrent: true, play: state.playing });
-    saveSnapshot();
-    void ensureUpcomingUrls();
+    afterQueueChange();
   });
 }
 
@@ -527,9 +501,7 @@ export function clearError() {
 
 /** Một bài vừa tải xong hoặc bị xoá: báo native để lần phát sau dùng file / dùng link. */
 export async function refreshLocalFile(trackId: string) {
-  const fileUrl = await fileUrlProvider(trackId).catch(() => undefined);
-  if (fileUrl) localFiles.add(trackId);
-  else localFiles.delete(trackId);
+  const fileUrl = await lookupLocalFile(trackId);
   await MeloPlayer.updateItem({ id: trackId, fileUrl: fileUrl ?? '' });
   if (!fileUrl) void ensureUpcomingUrls();
 }
@@ -568,27 +540,18 @@ async function restoreSnapshot() {
   void ensureUpcomingUrls();
 }
 
-async function watchNetwork() {
-  try {
-    const status = await Network.getStatus();
-    lastConnectionType = status.connectionType;
-    setNetworkStatus(status.connected, status.connectionType);
-    await Network.addListener('networkStatusChange', (s) => {
-      const changed = s.connectionType !== lastConnectionType;
-      lastConnectionType = s.connectionType;
-      setNetworkStatus(s.connected, s.connectionType);
-      if (!changed || !s.connected) return;
-      // Link YouTube gắn với IP: đổi Wi-Fi ↔ 4G thì link cũ hỏng, phải lấy lại.
-      log.info('player', `mạng đổi sang ${s.connectionType}: lấy lại link`);
-      clearAudioCache();
-      sentUrls.clear();
-      radioFailedSeed = undefined;
-      void ensureUpcomingUrls();
-      void maybeAppendRadio();
-    });
-  } catch (err) {
-    log.warn('player', 'không theo dõi được mạng:', err);
-  }
+/** Link YouTube gắn với IP: đổi Wi‑Fi ↔ 4G thì link cũ hỏng, phải lấy lại. */
+function watchNetwork(): () => void {
+  return useNetwork.subscribe((state, prev) => {
+    // 'unknown' → loại mạng thật: chỉ là lần đọc trạng thái đầu tiên lúc mở app.
+    if (!state.online || state.connectionType === prev.connectionType || prev.connectionType === 'unknown') return;
+    log.info('player', `mạng đổi sang ${state.connectionType}: lấy lại link`);
+    clearAudioCache();
+    sentUrls.clear();
+    radioFailedSeed = undefined;
+    void ensureUpcomingUrls();
+    void maybeAppendRadio();
+  });
 }
 
 /** Gọi một lần khi app khởi động. */
@@ -608,18 +571,18 @@ export function initPlayer(): Promise<void> {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') saveSnapshot();
     });
-    await watchNetwork();
+    unwatchNetwork = watchNetwork();
     await exclusive(restoreSnapshot).catch((err) => log.warn('player', 'khôi phục hàng chờ lỗi:', err));
   })();
   return initialized;
 }
 
 /** Chỉ dùng trong test. */
-export function __resetPlayerForTests(options: { sleep?: (ms: number) => Promise<void> } = {}) {
+export function __resetPlayerForTests() {
   sentUrls.clear();
   localFiles.clear();
   resolveGeneration = 0;
-  radioBusy = false;
+  radioInFlight = undefined;
   radioFailedSeed = undefined;
   consecutiveResolveFailures = 0;
   lastHistory = undefined;
@@ -627,10 +590,11 @@ export function __resetPlayerForTests(options: { sleep?: (ms: number) => Promise
   clearTimeout(snapshotTimer);
   snapshotTimer = undefined;
   initialized = undefined;
+  unwatchNetwork?.();
+  unwatchNetwork = undefined;
   queueLock = Promise.resolve();
   fileUrlProvider = async () => undefined;
   artworkFileProvider = async () => undefined;
   setNetworkStatus(true, 'unknown');
-  sleepFn = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
   usePlayer.setState({ ...initialPlayerState }, true);
 }

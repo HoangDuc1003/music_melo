@@ -37,9 +37,6 @@ export interface DownloadRow {
   bytes: number;
   /** tổng byte, 0 nếu chưa biết */
   total: number;
-  /** đường dẫn tương đối trong thư mục app (native) */
-  path?: string;
-  artworkPath?: string;
   error?: string;
   createdAt: number;
   completedAt?: number;

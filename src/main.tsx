@@ -1,24 +1,27 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { installGlobalErrorLogging, log } from '@/lib/log';
-import { initDownloads } from '@/downloads/manager';
+import { connectDownloadsToPlayer, initDownloads } from '@/downloads/manager';
 import { pruneHistory } from '@/lib/library';
+import { installGlobalErrorLogging, log } from '@/lib/log';
+import { initNetwork } from '@/lib/network';
 import { initPlayer } from '@/player/controller';
 import { preloadYouTube } from '@/youtube/client';
 import App from './App';
 import './styles.css';
 
+/** Một bước khởi động: lỗi thì ghi nhật ký, các bước sau vẫn chạy. */
+const step = (tag: string, fn: () => unknown) => Promise.resolve().then(fn).catch((err) => log.error(tag, 'khởi động lỗi:', err));
+
 installGlobalErrorLogging();
-void initPlayer()
-  .catch((err) => log.error('player', 'khởi động trình phát lỗi:', err))
-  .then(() => initDownloads())
-  .catch((err) => log.error('download', 'khởi động phần tải về lỗi:', err))
-  .then(() => pruneHistory())
-  .catch((err) => log.warn('library', 'dọn lịch sử lỗi:', err))
-  .then(() => import('@/sync/spotify-sync'))
-  .then((spotify) => spotify.initSpotify())
-  .catch((err) => log.warn('spotify', 'khởi động đồng bộ Spotify lỗi:', err));
+// Bài đã tải phát từ file ngay cả trong hàng chờ khôi phục lúc mở app → nối trước khi khởi động trình phát.
+connectDownloadsToPlayer();
+void step('network', initNetwork)
+  .then(() => step('player', initPlayer))
+  .then(() => step('download', initDownloads))
+  // Spotify nạp riêng (không làm nặng lúc mở app), đồng bộ sau khi phần phát/tải đã sẵn sàng.
+  .then(() => step('spotify', () => import('@/sync/spotify-sync').then((m) => m.initSpotify())));
+void step('library', pruneHistory);
 
 const queryClient = new QueryClient({
   defaultOptions: {

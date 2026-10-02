@@ -6,7 +6,7 @@ vi.mock('@/youtube/music', () => ({ search: yt.search }));
 
 import { db } from '@/lib/db';
 import type { SourceTrack } from './spotify-api';
-import { cleanSpotifyTitle, findOnYouTube, fold, matchTracks, pickBest, similarity } from './match';
+import { cleanSpotifyTitle, findOnYouTube, matchTracks, pickBest, similarity } from './match';
 
 const yTrack = (id: string, title: string, artist: string, duration = 200, isVideo = false): Track => ({
   id,
@@ -26,11 +26,6 @@ beforeEach(async () => {
 });
 
 describe('so khớp', () => {
-  it('bỏ dấu, ký tự đặc biệt', () => {
-    expect(fold('Sơn Tùng M-TP')).toBe('son tung m tp');
-    expect(fold('Đen Vâu')).toBe('den vau');
-  });
-
   it('bỏ phần phụ trong tên bài Spotify nhưng giữ dấu gạch hợp lệ', () => {
     expect(cleanSpotifyTitle('Shape of You (feat. Someone)')).toBe('Shape of You');
     expect(cleanSpotifyTitle('Yesterday - Remastered 2009')).toBe('Yesterday');

@@ -59,19 +59,3 @@ async function devFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
 }
 
 export const appFetch: typeof fetch = isNative ? nativeFetch : devFetch;
-
-export async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await appFetch(url, init);
-  if (!res.ok) throw new HttpError(res.status, `${res.status} ${url.split('?')[0]}`);
-  return (await res.json()) as T;
-}
-
-export class HttpError extends Error {
-  constructor(
-    readonly status: number,
-    message: string
-  ) {
-    super(message);
-    this.name = 'HttpError';
-  }
-}
