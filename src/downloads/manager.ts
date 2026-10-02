@@ -130,7 +130,7 @@ async function downloadAudio(id: string): Promise<{ bytes: number; mimeType?: st
   for (let attempt = 0; ; attempt++) {
     try {
       // Lần thử lại thì lấy link mới (link cũ có thể đã hết hạn hoặc gắn IP cũ).
-      const audio = await resolveGate.run(() => resolveAudio(id, { refresh: attempt > 0 }));
+      const audio = await resolveGate.run(() => resolveAudio(id, { refresh: attempt > 0, download: true }));
       const { url, headers } = withRange(audio.url, audio.contentLength);
       const bytes = await getStorage().saveAudio({
         id,
@@ -302,6 +302,34 @@ export async function enqueueDownloads(tracks: Track[]): Promise<number> {
 export async function retryDownload(id: string) {
   await db.downloads.update(id, { status: 'queued', error: undefined });
   void pump();
+}
+
+/** File nhạc người dùng tự chọn trên máy (bản web). */
+export interface LocalFile {
+  track: Track;
+  audio: Blob;
+  artwork?: Blob;
+}
+
+/** Lưu file nhạc người dùng tự chọn như bài đã tải xong (bỏ qua file đã thêm trước đó). Trả về số bài mới. */
+export async function addLocalFiles(files: LocalFile[]): Promise<number> {
+  const storage = getStorage();
+  const existing = await db.downloads.bulkGet(files.map((f) => f.track.id));
+  const fresh = files.filter((f, i) => !existing[i] && SAFE_ID.test(f.track.id));
+  if (!fresh.length) return 0;
+  for (const file of fresh) await storage.saveFile(file.track.id, file.audio, file.artwork);
+  await rememberTracks(fresh.map((f) => f.track));
+  const now = Date.now();
+  await db.downloads.bulkPut(
+    fresh.map((f, i) => ({ id: f.track.id, status: 'done' as const, bytes: f.audio.size, total: f.audio.size, createdAt: now + i, completedAt: now + i }))
+  );
+  const covers = await Promise.all(fresh.filter((f) => f.artwork).map(async (f) => [f.track.id, await storage.artworkUrl(f.track.id)] as const));
+  useDownloads.setState((s) => {
+    const artwork = new Map(s.artwork);
+    for (const [id, url] of covers) if (url) artwork.set(id, url);
+    return { artwork };
+  });
+  return fresh.length;
 }
 
 export const removeDownload = (id: string) => removeDownloads([id]);

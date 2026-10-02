@@ -89,6 +89,11 @@ class FakeStorage implements DownloadStorage {
   async artworkFileUrl(id: string) {
     return this.artwork.has(id) ? `file:///music/${id}.jpg` : undefined;
   }
+  async saveFile(id: string, audio: Blob, artwork?: Blob) {
+    this.files.set(id, audio.size);
+    if (artwork) this.artwork.add(id);
+    return audio.size;
+  }
   async listSidecars(known: ReadonlySet<string>) {
     return [...this.sidecars.values()].filter((s) => !known.has(s.track.id));
   }
@@ -169,7 +174,7 @@ describe('hàng đợi tải', () => {
     storage.failTimes.set(track(1).id, 1);
     await enqueueDownloads([track(1)]);
     await waitForIdleForTests();
-    expect(mocks.resolveAudio).toHaveBeenLastCalledWith(track(1).id, { refresh: true });
+    expect(mocks.resolveAudio).toHaveBeenLastCalledWith(track(1).id, { refresh: true, download: true });
     expect((await db.downloads.get(track(1).id))?.status).toBe('done');
   });
 

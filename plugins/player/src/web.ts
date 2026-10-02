@@ -1,5 +1,6 @@
-// Bản web của plugin (dùng thẻ <audio>) để làm và thử giao diện trên PC.
+// Bản web của plugin (dùng thẻ <audio>): để thử giao diện trên PC, và là trình phát của Melo bản web (PWA).
 // Cố ý mô phỏng đúng hành vi của bản Swift (hàng chờ, needsUrl, lặp lại, hẹn giờ).
+// Màn hình khoá / Trung tâm điều khiển của iPhone dùng Media Session (tên bài, ảnh bìa, nút phát/chuyển bài).
 import { WebPlugin } from '@capacitor/core';
 import type { MeloPlayerPlugin, PlayerItem, PlayerState, RepeatMode, SetQueueOptions } from './definitions';
 
@@ -34,6 +35,49 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
     });
     this.audio.addEventListener('ended', () => this.handleEnded());
     this.audio.addEventListener('error', () => this.handleError());
+    this.setupMediaSession();
+  }
+
+  private setupMediaSession() {
+    const session = typeof navigator === 'undefined' ? undefined : navigator.mediaSession;
+    if (!session) return;
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['play', () => void this.play()],
+      ['pause', () => void this.pause()],
+      ['previoustrack', () => void this.previous()],
+      ['nexttrack', () => void this.next()],
+      ['seekto', (details) => details.seekTime !== undefined && void this.seekTo({ position: details.seekTime })]
+    ];
+    for (const [action, handler] of handlers) {
+      try {
+        session.setActionHandler(action, handler);
+      } catch {
+        // trình duyệt không hỗ trợ nút này
+      }
+    }
+  }
+
+  private updateMediaSession(state: PlayerState) {
+    const session = typeof navigator === 'undefined' ? undefined : navigator.mediaSession;
+    if (!session) return;
+    session.playbackState = state.playing ? 'playing' : this.current ? 'paused' : 'none';
+    if (state.duration > 0 && Number.isFinite(state.duration)) {
+      try {
+        session.setPositionState({ duration: state.duration, position: Math.min(state.position, state.duration), playbackRate: 1 });
+      } catch {
+        // vị trí không hợp lệ trong lúc chuyển bài
+      }
+    }
+  }
+
+  private showNowPlaying(item: PlayerItem) {
+    if (typeof navigator === 'undefined' || !navigator.mediaSession || typeof MediaMetadata === 'undefined') return;
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: item.title,
+      artist: item.artist ?? '',
+      album: item.album ?? '',
+      artwork: item.artwork ? [{ src: item.artwork, sizes: '512x512' }] : []
+    });
   }
 
   private get current(): PlayerItem | undefined {
@@ -58,7 +102,9 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
 
   private emitState() {
     this.lastStateEmit = Date.now();
-    this.notifyListeners('state', this.buildState());
+    const state = this.buildState();
+    this.notifyListeners('state', state);
+    this.updateMediaSession(state);
   }
 
   private load(index: number, position = 0, play = true) {
@@ -70,6 +116,7 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
       return;
     }
     this.notifyListeners('itemChanged', { index, id: item.id });
+    this.showNowPlaying(item);
     const src = item.fileUrl || item.url;
     if (!src) {
       this.waitingForUrl = true;

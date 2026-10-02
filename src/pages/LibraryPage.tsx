@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronRight, Download, Heart, History, Plus, Settings } from 'lucide-react';
 import { Artwork } from '@/components/Artwork';
+import { ImportMusicRow } from '@/components/ImportMusicRow';
 import { Page, RootTitle } from '@/components/Page';
 import { PlaylistNameForm } from '@/components/PlaylistNameForm';
 import { Sheet } from '@/components/Sheet';
@@ -79,6 +80,7 @@ export function LibraryPage() {
           </div>
         }
       />
+      {__WEB_APP__ && <ImportMusicRow />}
       <Row
         route={{ name: 'history' }}
         title="Đã nghe gần đây"

@@ -15,6 +15,7 @@
 
 [![Cài lên iPhone](https://img.shields.io/badge/📲_Cài_lên_iPhone-Xem_hướng_dẫn_có_hình-1ed760?style=for-the-badge)](#cai-dat)
 [![Tải bản mới nhất](https://img.shields.io/badge/⬇️_Bản_mới_nhất-Melo.ipa-white?style=for-the-badge&logo=github&logoColor=black)](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest)
+[![Bản web](https://img.shields.io/badge/🌐_Bản_web-Không_cần_cài_app-black?style=for-the-badge&logo=vercel&logoColor=white)](docs/WEB.md)
 
 [![Build iOS](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml/badge.svg?branch=main)](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml)
 
@@ -45,6 +46,13 @@
 - Melo tự tìm từng bài trên YouTube Music: so tên bài, nghệ sĩ và thời lượng, không ghép nhầm bản cover.
 - **Tự đồng bộ khi mở app.** Playlist không đổi thì bỏ qua.
 - Không có Premium: nhập từ file dữ liệu Spotify. Hướng dẫn: [docs/SPOTIFY.md](docs/SPOTIFY.md).
+
+### Bản web 🌐
+
+- **Không cần SideStore:** mở link bằng Safari → *Thêm vào MH chính*. Đưa lên Vercel một lần, mỗi lần đẩy code thì tự cập nhật.
+- Nhạc từ **Jamendo** (kho nhạc Creative Commons) và **file nhạc của bạn** (MP3/M4A trong app Tệp, iCloud Drive; tự đọc tên bài và ảnh bìa trong file).
+- **Mở app và nghe nhạc đã tải khi không có mạng.** Màn hình khoá hiện tên bài và nút chuyển bài.
+- Không có YouTube Music: trình duyệt không gọi thẳng YouTube được, và Melo không dùng server. Hướng dẫn: [docs/WEB.md](docs/WEB.md).
 
 ### Thư viện 📚
 

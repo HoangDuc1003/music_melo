@@ -4,6 +4,7 @@ import { appFetch } from '@/youtube/http';
 import { getYouTubeLyrics } from '@/youtube/music';
 import type { Lyrics, LyricsLine, Track } from '@/youtube/types';
 import { db } from './db';
+import { isNative } from './platform';
 import { log } from './log';
 import { cleanArtist, cleanTitle } from './text';
 
@@ -64,7 +65,8 @@ interface LrclibRecord {
 
 async function lrclib<T>(path: string, params: Record<string, string>): Promise<T | undefined> {
   const url = `${LRCLIB}${path}?${new URLSearchParams(params)}`;
-  const res = await appFetch(url, { headers: { 'Lrclib-Client': 'Melo (personal iPhone app)' } });
+  // Bản web gọi thẳng từ trình duyệt: header riêng sẽ cần xin phép CORS trước, nên chỉ gửi từ app iPhone.
+  const res = await appFetch(url, isNative ? { headers: { 'Lrclib-Client': 'Melo (personal iPhone app)' } } : undefined);
   if (res.status === 404) return undefined;
   if (!res.ok) throw new Error(`LRCLIB ${res.status}`);
   return (await res.json()) as T;

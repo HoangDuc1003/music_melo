@@ -16,6 +16,10 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
   (`youtube.readonly`, client type "TVs and Limited Input devices"). Secrets go to GitHub Secrets, never in code.
 - Most reference apps are GPL: learn ideas only, never copy code.
 - `appId` `com.melo.music` must never change (downloads live in the app container).
+- **Web flavor (PWA, 2026-10-02, user-approved):** same React app built with `vite --mode web` for static hosting on
+  Vercel (`vercel.json`, no serverless functions — still no backend). Browsers can't call YouTube (CORS), so the web
+  flavor has **no YouTube/Spotify**: music = **Jamendo** (Creative Commons API, user's own free Client ID in Settings or
+  `VITE_JAMENDO_CLIENT_ID`) + the user's **own audio files**. The iPhone app stays the full version.
 - Repo `HoangDuc1003/spoti_music` is **public**: never commit secrets.
 
 ## Status (2026-10-02, session 2 — 10 closed loops + Spotify sync + refactor pass, CI green each round)
@@ -109,6 +113,20 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   verified with unit tests + `dev:mock` (`src/sync/mock/`), not against real Spotify yet.
 - `npm run dev:mock` (aliases `@/youtube/{music,stream,http}` → `src/youtube/mock/`, `@/sync/spotify-{auth,api}` →
   `src/sync/mock/`) for UI work without YouTube/Spotify.
+- **Web flavor** `src/web/` (user guide `docs/WEB.md`): `--mode web` aliases `@/youtube/{music,stream,http,client}` →
+  `src/web/*` and defines `__WEB_APP__` (compile-time; UI gates: Spotify section → "Nguồn nhạc", no Video search tab,
+  "Thêm nhạc từ máy" in Library, web texts). `jamendo.ts` (API v3.0, ids `jm-<id>`, links remembered per track;
+  `resolveAudio(id, { download: true })` uses `audiodownload` and refuses when `audiodownload_allowed` is false; radio =
+  seed + same-genre popular), `tags.ts` (hand-written ID3v2.2–2.4 + MP4 `ilst` reader, filename fallback),
+  `local-files.ts` (ids `lf-<sha256>`, stored via `addLocalFiles` → `DownloadStorage.saveFile`, web only),
+  `service-worker.js` (template; `vite.config.ts` `progressiveWebApp()` emits `/sw.js` with the precache list + hash
+  version, manifest, `apple-touch-icon.png` from `docs/icon-512.png`, iOS meta tags), `pwa.ts` (SW registration,
+  `navigator.storage.persist/estimate`). Web CSP drops `'unsafe-eval'` and allows `connect-src https:`. The web player
+  (`plugins/player/src/web.ts`) sets Media Session (lock screen). `SAFE_ID` is now `[\w-]{3,64}`; `withRange` only
+  touches googlevideo URLs. Verified with unit tests + Playwright against `vite preview` of `dist-web` with
+  `context.route` stubbing api.jamendo.com/storage (flow incl. offline reload via SW). **Not verified against real
+  Jamendo** (container egress blocks it): API CORS and whether `storage.jamendo.com` audio allows CORS downloads.
+  CI builds the web flavor too (`npm run build:web`).
 
 NOT verified on a real iPhone yet (no device here): background playback across tracks, lock screen, FileTransfer
 downloads, AVPlayer with googlevideo headers. First thing to do when the user reports back: read their in-app log.
@@ -155,6 +173,8 @@ TODO (next sessions):
 - `npm run dev` — Vite on :5173 with the YouTube dev proxy (`/__proxy/<host>/…`, see `vite.config.ts`);
   `MELO_LAN=1 npm run dev` to expose it on the LAN. `npm run dev:mock` — sample data, no YouTube needed.
 - `npm run build` — typecheck + build. `npm test` — vitest (jsdom + fake-indexeddb).
+- `npm run dev:web` / `npm run build:web` (→ `dist-web/`, what Vercel runs) — web flavor. Web smoke test (11 steps incl.
+  offline reload): `npx vite preview --mode web --outDir dist-web --port 4175`, then `CHROMIUM_PATH=… node scripts/web-smoke.mjs`.
 - `npx cap sync ios` — copy web build + update iOS SPM package list after adding plugins.
 - `cd plugins/player && swift test` — native queue tests (macOS/Linux; CI runs them on every push).
 - UI smoke test (9 flows incl. download, offline, edge swipe): `npm run dev:mock -- --port 5174`, then

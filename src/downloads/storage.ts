@@ -48,17 +48,23 @@ export interface DownloadStorage {
   artworkFileUrl(id: string): Promise<string | undefined>;
   /** Thông tin các bài có file trên máy nhưng không có trong `known` (dựng lại thư viện nếu dữ liệu app bị mất). */
   listSidecars(known: ReadonlySet<string>): Promise<SidecarInfo[]>;
+  /** Lưu file nhạc người dùng tự chọn (bản web). Trả về số byte. */
+  saveFile(id: string, audio: Blob, artwork?: Blob): Promise<number>;
 }
 
-/** videoId của YouTube: đúng 11 ký tự [A-Za-z0-9_-]. Kiểm tra trước khi dùng làm tên file. */
-export const SAFE_ID = /^[\w-]{11}$/;
+/**
+ * id bài dùng làm tên file: chỉ [A-Za-z0-9_-] (videoId YouTube 11 ký tự; bản web: "jm-123…", "lf-…").
+ * Kiểm tra trước khi ghép vào đường dẫn.
+ */
+export const SAFE_ID = /^[\w-]{3,64}$/;
 
 function assertSafeId(id: string) {
   if (!SAFE_ID.test(id)) throw new Error(`id không hợp lệ: ${id.slice(0, 20)}`);
 }
 
-/** YouTube treo nếu GET cả file không có range → thêm &range=0-<n-1> (xem CLAUDE.md). */
+/** YouTube treo nếu GET cả file không có range → thêm &range=0-<n-1> (xem CLAUDE.md). Nguồn khác giữ nguyên. */
 export function withRange(url: string, contentLength: number | undefined): { url: string; headers: Record<string, string> } {
+  if (!/(^|\.)googlevideo\.com$/.test(new URL(url).hostname)) return { url, headers: {} };
   if (contentLength && contentLength > 0) {
     const u = new URL(url);
     u.searchParams.set('range', `0-${contentLength - 1}`);
@@ -171,6 +177,10 @@ class NativeStorage implements DownloadStorage {
     return file ? Capacitor.convertFileSrc(file) : undefined;
   }
 
+  async saveFile(): Promise<number> {
+    throw new Error('Thêm nhạc từ máy chỉ có ở bản web');
+  }
+
   async listSidecars(known: ReadonlySet<string>): Promise<SidecarInfo[]> {
     await this.folderUri();
     const { files } = await Filesystem.readdir({ path: FOLDER, directory: DIR });
@@ -195,7 +205,13 @@ class NativeStorage implements DownloadStorage {
 // ---------- Trình duyệt (chạy thử) ----------
 
 async function fetchBlob(url: string, headers: Record<string, string> | undefined, onProgress?: (p: DownloadProgress) => void): Promise<Blob> {
-  const res = url.startsWith('blob:') || url.startsWith('data:') ? await fetch(url) : await appFetch(url, { headers });
+  let res: Response;
+  try {
+    res = url.startsWith('blob:') || url.startsWith('data:') ? await fetch(url) : await appFetch(url, { headers });
+  } catch {
+    // Trình duyệt chỉ báo "Load failed" / "Failed to fetch": mất mạng hoặc máy chủ không cho trang web tải (CORS).
+    throw Object.assign(new Error('Không tải được file (mất mạng, hoặc nguồn nhạc không cho tải về)'), { reason: 'network' });
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const total = Number(res.headers.get('content-length')) || 0;
   if (!res.body || !onProgress) return res.blob();
@@ -236,6 +252,13 @@ class WebStorage implements DownloadStorage {
 
   async saveSidecar(): Promise<void> {
     // Thông tin bài đã nằm trong IndexedDB.
+  }
+
+  async saveFile(id: string, audio: Blob, artwork?: Blob): Promise<number> {
+    assertSafeId(id);
+    await db.blobs.put({ id, audio, artwork });
+    this.revoke(id);
+    return audio.size;
   }
 
   private revoke(id: string) {

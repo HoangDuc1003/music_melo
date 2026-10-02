@@ -11,9 +11,10 @@ import { setAutoplay } from '@/player/controller';
 import { usePlayer } from '@/player/store';
 import { navigate } from '@/ui/nav';
 import { confirmAction, copyText, openSleepTimer } from '@/ui/overlays';
+import { WebSources } from './WebSettings';
 
-// Phần Spotify nạp riêng (không làm nặng lúc mở app).
-const SpotifySection = lazy(() => import('./SpotifySettings').then((m) => ({ default: m.SpotifySection })));
+// Phần Spotify nạp riêng (không làm nặng lúc mở app); bản web không có Spotify.
+const SpotifySection = __WEB_APP__ ? () => null : lazy(() => import('./SpotifySettings').then((m) => ({ default: m.SpotifySection })));
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -36,17 +37,23 @@ export function SettingsPage() {
       <Section title="Phát nhạc">
         <SettingsRow
           label="Tự phát bài tương tự"
-          detail="Hết hàng chờ thì phát tiếp radio từ YouTube Music"
+          detail={__WEB_APP__ ? 'Hết hàng chờ thì phát tiếp các bài cùng thể loại' : 'Hết hàng chờ thì phát tiếp radio từ YouTube Music'}
           right={<Toggle checked={autoplay} onChange={setAutoplay} label="Tự phát bài tương tự" />}
         />
         <SettingsRow label="Hẹn giờ tắt" detail="Dừng nhạc sau một khoảng thời gian" onClick={openSleepTimer} />
       </Section>
 
-      <Section title="Spotify">
-        <Suspense fallback={<div className="h-[60px]" />}>
-          <SpotifySection />
-        </Suspense>
-      </Section>
+      {__WEB_APP__ ? (
+        <Section title="Nguồn nhạc">
+          <WebSources />
+        </Section>
+      ) : (
+        <Section title="Spotify">
+          <Suspense fallback={<div className="h-[60px]" />}>
+            <SpotifySection />
+          </Suspense>
+        </Section>
+      )}
 
       <Section title="Tải về">
         <SettingsRow label="Đã tải" detail={`${doneCount} bài • ${formatBytes(totalDownloadedBytes(rows.values()))}`} onClick={() => navigate({ name: 'downloads' })} />
@@ -104,7 +111,9 @@ export function SettingsPage() {
       <Section title="Thông tin">
         <SettingsRow label="Phiên bản" detail={`Melo ${__APP_VERSION__}`} />
         <p className="px-4 pt-2 text-[12px] leading-relaxed text-subdued">
-          App dùng cá nhân, không phát hành trên App Store. Nhạc lấy từ YouTube Music ngay trên máy, không qua máy chủ nào.
+          {__WEB_APP__
+            ? 'Bản web của Melo: nhạc Creative Commons từ Jamendo (giấy phép của từng nghệ sĩ) và file nhạc của bạn. Nhạc đã tải nằm trong trình duyệt trên máy này, không qua máy chủ nào.'
+            : 'App dùng cá nhân, không phát hành trên App Store. Nhạc lấy từ YouTube Music ngay trên máy, không qua máy chủ nào.'}
         </p>
       </Section>
     </Page>

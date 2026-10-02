@@ -15,7 +15,8 @@ import type { Card, SearchType, ShelfItem } from '@/youtube/types';
 
 const TYPES: { type: SearchType; label: string }[] = [
   { type: 'song', label: 'Bài hát' },
-  { type: 'video', label: 'Video' },
+  // Bản web (Jamendo) không có video nhạc.
+  ...(__WEB_APP__ ? [] : [{ type: 'video' as const, label: 'Video' }]),
   { type: 'album', label: 'Album' },
   { type: 'artist', label: 'Nghệ sĩ' },
   { type: 'playlist', label: 'Playlist' }
@@ -197,7 +198,9 @@ export function SearchPage() {
               ))}
             </>
           ) : (
-            <Centered>Tìm bài hát, nghệ sĩ, album hoặc dán link playlist YouTube.</Centered>
+            <Centered>
+              {__WEB_APP__ ? 'Tìm bài hát, nghệ sĩ, album trong kho nhạc Creative Commons của Jamendo.' : 'Tìm bài hát, nghệ sĩ, album hoặc dán link playlist YouTube.'}
+            </Centered>
           )}
         </div>
       )}

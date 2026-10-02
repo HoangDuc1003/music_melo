@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { Readable } from 'node:stream';
 import { fileURLToPath, URL } from 'node:url';
@@ -68,31 +69,90 @@ function devProxy(): Plugin {
 
 /**
  * Content-Security-Policy cho bản build (không áp dụng lúc dev vì Vite cần script nội tuyến cho HMR).
+ * App iPhone:
  * - script: chỉ file của app; 'unsafe-eval' bắt buộc cho youtubei.js (giải mã link) và BotGuard (PO token).
  * - connect: mọi request mạng đi qua HTTP native (CapacitorHttp/FileTransfer), WebView không cần gọi ra ngoài.
  * - img/media: ảnh bìa từ máy chủ ảnh của Google (https), ảnh/nhạc đã tải (blob:, capacitor://localhost).
+ * Bản web: không có youtubei.js nên bỏ 'unsafe-eval'; trình duyệt tự gọi Jamendo/LRCLIB (https).
  */
-const CSP = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
-  "media-src 'self' blob: https:",
-  "font-src 'self' data:",
-  "connect-src 'self' blob: data:",
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-src 'none'",
-  "worker-src 'self' blob:"
-].join('; ');
+function csp(webApp: boolean): string {
+  return [
+    "default-src 'self'",
+    webApp ? "script-src 'self'" : "script-src 'self' 'unsafe-eval'",
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: https:",
+    "media-src 'self' blob: https:",
+    "font-src 'self' data:",
+    webApp ? "connect-src 'self' blob: data: https:" : "connect-src 'self' blob: data:",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-src 'none'",
+    "worker-src 'self' blob:",
+    "manifest-src 'self'"
+  ].join('; ');
+}
 
-function contentSecurityPolicy(): Plugin {
+function contentSecurityPolicy(webApp: boolean): Plugin {
   return {
     name: 'melo-csp',
     apply: 'build',
     transformIndexHtml(html) {
-      return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${CSP}" />`);
+      return html.replace('<meta charset="UTF-8" />', `<meta charset="UTF-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp(webApp)}" />`);
+    }
+  };
+}
+
+/** Thẻ để iPhone coi trang là app khi "Thêm vào MH chính" (toàn màn hình, icon riêng). */
+const PWA_HEAD = [
+  '<link rel="manifest" href="/manifest.webmanifest" />',
+  '<link rel="apple-touch-icon" href="/apple-touch-icon.png" />',
+  '<meta name="apple-mobile-web-app-capable" content="yes" />',
+  '<meta name="mobile-web-app-capable" content="yes" />',
+  '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />',
+  '<meta name="apple-mobile-web-app-title" content="Melo" />'
+].join('\n    ');
+
+const MANIFEST = {
+  name: 'Melo',
+  short_name: 'Melo',
+  description: 'Nghe nhạc Creative Commons và nhạc của bạn, tải về nghe offline',
+  lang: 'vi',
+  start_url: '/',
+  scope: '/',
+  display: 'standalone',
+  orientation: 'portrait',
+  background_color: '#121212',
+  theme_color: '#121212',
+  icons: [
+    { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+    { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }
+  ]
+};
+
+/**
+ * Bản web (`--mode web`): manifest, icon cho iPhone và service worker (`/sw.js`) lưu sẵn mọi file của bản build
+ * để mở app khi không có mạng. Phiên bản service worker = mã băm danh sách file → bản build mới tự cập nhật.
+ */
+function progressiveWebApp(): Plugin {
+  return {
+    name: 'melo-pwa',
+    apply: 'build',
+    transformIndexHtml(html) {
+      return html.replace('<title>', `${PWA_HEAD}\n    <title>`);
+    },
+    generateBundle(_options, bundle) {
+      const icon = readFileSync(new URL('./docs/icon-512.png', import.meta.url));
+      this.emitFile({ type: 'asset', fileName: 'icon-512.png', source: icon });
+      this.emitFile({ type: 'asset', fileName: 'apple-touch-icon.png', source: icon });
+      this.emitFile({ type: 'asset', fileName: 'manifest.webmanifest', source: JSON.stringify(MANIFEST, null, 2) });
+      const files = ['/', '/index.html', '/icon.svg', '/icon-512.png', '/apple-touch-icon.png', '/manifest.webmanifest'];
+      for (const name of Object.keys(bundle)) if (!name.endsWith('.map') && name !== 'index.html') files.push(`/${name}`);
+      const precache = [...new Set(files)].sort();
+      const version = createHash('sha256').update(precache.join('\n')).digest('hex').slice(0, 12);
+      const template = readFileSync(new URL('./src/web/service-worker.js', import.meta.url), 'utf8');
+      const source = template.replace('__MELO_VERSION__', version).replace('__MELO_PRECACHE__', JSON.stringify(precache));
+      this.emitFile({ type: 'asset', fileName: 'sw.js', source });
     }
   };
 }
@@ -101,7 +161,7 @@ const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 
 const src = fileURLToPath(new URL('./src', import.meta.url));
 
 export default defineConfig(({ mode }) => ({
-  plugins: [react(), tailwindcss(), devProxy(), contentSecurityPolicy()],
+  plugins: [react(), tailwindcss(), devProxy(), contentSecurityPolicy(mode === 'web'), ...(mode === 'web' ? [progressiveWebApp()] : [])],
   resolve: {
     alias: [
       // `vite --mode mock`: dữ liệu mẫu thay cho YouTube (chạy thử/chụp giao diện khi không vào được YouTube).
@@ -113,10 +173,13 @@ export default defineConfig(({ mode }) => ({
             { find: /^@\/sync\/spotify-(auth|api)$/, replacement: `${src}/sync/mock/spotify-$1.ts` }
           ]
         : []),
+      // `vite --mode web`: bản web (PWA) lấy nhạc từ Jamendo thay cho YouTube, xem src/web/.
+      ...(mode === 'web' ? [{ find: /^@\/youtube\/(music|stream|http|client)$/, replacement: `${src}/web/$1.ts` }] : []),
       { find: '@', replacement: src }
     ]
   },
   define: {
+    __WEB_APP__: JSON.stringify(mode === 'web'),
     __APP_VERSION__: JSON.stringify(`${pkg.version}${process.env.GITHUB_RUN_NUMBER ? ` (build ${process.env.GITHUB_RUN_NUMBER})` : ' (dev)'}`)
   },
   build: {

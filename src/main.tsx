@@ -6,6 +6,7 @@ import { pruneHistory } from '@/lib/library';
 import { installGlobalErrorLogging, log } from '@/lib/log';
 import { initNetwork } from '@/lib/network';
 import { initPlayer } from '@/player/controller';
+import { registerServiceWorker, requestPersistentStorage } from '@/web/pwa';
 import { preloadYouTube } from '@/youtube/client';
 import App from './App';
 import './styles.css';
@@ -16,12 +17,18 @@ const step = (tag: string, fn: () => unknown) => Promise.resolve().then(fn).catc
 installGlobalErrorLogging();
 // Bài đã tải phát từ file ngay cả trong hàng chờ khôi phục lúc mở app → nối trước khi khởi động trình phát.
 connectDownloadsToPlayer();
-void step('network', initNetwork)
+const ready = step('network', initNetwork)
   .then(() => step('player', initPlayer))
-  .then(() => step('download', initDownloads))
-  // Spotify nạp riêng (không làm nặng lúc mở app), đồng bộ sau khi phần phát/tải đã sẵn sàng.
-  .then(() => step('spotify', () => import('@/sync/spotify-sync').then((m) => m.initSpotify())));
+  .then(() => step('download', initDownloads));
 void step('library', pruneHistory);
+if (__WEB_APP__) {
+  // Bản web: lưu giao diện để mở được khi offline, xin giữ nhạc đã tải lâu dài.
+  void step('pwa', registerServiceWorker);
+  void step('pwa', requestPersistentStorage);
+} else {
+  // Spotify nạp riêng (không làm nặng lúc mở app), đồng bộ sau khi phần phát/tải đã sẵn sàng.
+  void ready.then(() => step('spotify', () => import('@/sync/spotify-sync').then((m) => m.initSpotify())));
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

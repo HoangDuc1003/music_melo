@@ -110,6 +110,9 @@ jobs:
       - name: Kiểm tra dung lượng JS nạp ngay (mở app nhanh)
         run: npm run check:bundle
 
+      - name: Build bản web (PWA cho Vercel)
+        run: npm run build:web
+
       - name: Đồng bộ Capacitor iOS
         run: npx cap sync ios
 

@@ -15,12 +15,14 @@ Có hai cách:
 
 Apple không cho cài file IPA khi chưa được ký. Với Apple ID miễn phí, việc ký bắt buộc phải qua một công cụ như SideStore, AltStore hoặc Sideloadly. Muốn bỏ hẳn công cụ đó thì chỉ còn cách dùng tài khoản trả phí (cách 2).
 
-**Vì sao không làm bản web (Vercel, "Thêm vào MH chính")?**
+**Còn bản web (Vercel, "Thêm vào MH chính") thì sao?**
+
+Đã có, xem [WEB.md](WEB.md): không cần SideStore, nghe offline được. Nhưng bản web **không có YouTube Music**:
 
 * Trình duyệt chặn web gọi thẳng YouTube (CORS). Muốn gọi phải có server trung gian, mà YouTube hay chặn IP máy chủ (Vercel, AWS…) bằng lỗi "Sign in to confirm you're not a bot".
-* Web app trên iPhone không tự chuyển sang bài kế khi đã khoá màn hình.
+* Vì vậy bản web lấy nhạc từ Jamendo (Creative Commons) và file nhạc của bạn. Phát khi khoá màn hình cũng kém ổn định hơn app thật.
 
-Nghĩa là bản web mất đúng hai thứ quan trọng nhất của Melo: phát nền và chạy không cần server.
+Muốn nghe YouTube Music, phát nền chắc chắn và đồng bộ Spotify thì cài app iPhone theo một trong hai cách dưới đây.
 
 ---
 

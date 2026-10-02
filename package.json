@@ -7,8 +7,9 @@
   "scripts": {
     "dev": "vite",
     "dev:mock": "vite --mode mock",
+    "dev:web": "vite --mode web",
     "build": "tsc --noEmit && vite build",
-    "build:web": "vite build",
+    "build:web": "tsc --noEmit && vite build --mode web --outDir dist-web",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check:bundle": "node scripts/check-bundle.mjs dist --max-js 170 --max-css 12",

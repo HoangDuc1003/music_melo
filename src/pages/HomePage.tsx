@@ -5,6 +5,7 @@ import { ErrorState, Page, RootTitle } from '@/components/Page';
 import { Shelf } from '@/components/Shelf';
 import { greeting } from '@/lib/format';
 import { useRecentTracks } from '@/lib/library';
+import { errorMessage } from '@/lib/log';
 import { playTracks } from '@/player/controller';
 import { navigate } from '@/ui/nav';
 import { getHome } from '@/youtube/music';
@@ -22,6 +23,20 @@ function ShelfSkeleton() {
         ))}
       </div>
     </div>
+  );
+}
+
+/** Bản web: lỗi của Jamendo đã viết sẵn tiếng Việt (ví dụ chưa nhập Client ID) → hiện nguyên văn + nút mở Cài đặt. */
+function HomeError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const fallback = 'Không tải được trang chủ. Kiểm tra kết nối mạng.';
+  if (!__WEB_APP__) return <ErrorState message={fallback} onRetry={onRetry} />;
+  return (
+    <>
+      <ErrorState message={errorMessage(error, fallback)} onRetry={onRetry} />
+      <button className="mx-auto -mt-4 block text-[14px] font-semibold text-accent" onClick={() => navigate({ name: 'settings' })}>
+        Mở Cài đặt
+      </button>
+    </>
   );
 }
 
@@ -57,8 +72,16 @@ export function HomePage() {
       )}
 
       {home.isPending && [0, 1, 2].map((i) => <ShelfSkeleton key={i} />)}
-      {home.isError && <ErrorState message="Không tải được trang chủ. Kiểm tra kết nối mạng." onRetry={() => void home.refetch()} />}
+      {home.isError && <HomeError error={home.error} onRetry={() => void home.refetch()} />}
       {home.data?.map((shelf) => <Shelf key={shelf.title} shelf={shelf} />)}
+      {__WEB_APP__ && home.data && (
+        <p className="px-4 pt-8 text-center text-[12px] text-subdued">
+          Nhạc Creative Commons từ{' '}
+          <a className="underline" href="https://www.jamendo.com" target="_blank" rel="noopener noreferrer">
+            Jamendo
+          </a>
+        </p>
+      )}
     </Page>
   );
 }

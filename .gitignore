@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-web/
+.vercel/
 coverage/
 *.log
 *.tsbuildinfo
@@ -29,3 +31,4 @@ plugins/player/Package.resolved
 
 # Ảnh của scripts/ui-smoke.mjs
 ui-smoke-shots/
+web-smoke-shots/

@@ -66,7 +66,8 @@ export function clearAudioCache() {
   inflight.clear();
 }
 
-export function resolveAudio(videoId: string, options: { refresh?: boolean } = {}): Promise<ResolvedAudio> {
+/** `download` không có tác dụng ở đây: link YouTube dùng được cho cả phát lẫn tải (khác bản web, xem src/web/stream.ts). */
+export function resolveAudio(videoId: string, options: { refresh?: boolean; download?: boolean } = {}): Promise<ResolvedAudio> {
   if (options.refresh) cache.delete(videoId);
   const cached = getCachedAudio(videoId);
   if (cached) return Promise.resolve(cached);
