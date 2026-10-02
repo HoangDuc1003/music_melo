@@ -14,10 +14,10 @@
 **Tìm và nghe YouTube Music với giao diện kiểu Spotify. Tắt màn hình vẫn phát, tự chuyển bài, tải về nghe offline. Chạy hoàn toàn trên iPhone, không cần server.**
 
 [![Cài lên iPhone](https://img.shields.io/badge/📲_Cài_lên_iPhone-Xem_hướng_dẫn_có_hình-1ed760?style=for-the-badge)](#cai-dat)
-[![Tải bản mới nhất](https://img.shields.io/badge/⬇️_Bản_mới_nhất-Melo.ipa-white?style=for-the-badge&logo=github&logoColor=black)](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest)
+[![Tải bản mới nhất](https://img.shields.io/badge/⬇️_Bản_mới_nhất-Melo.ipa-white?style=for-the-badge&logo=github&logoColor=black)](https://github.com/HoangDuc1003/music_melo/releases/tag/ios-latest)
 [![Bản web](https://img.shields.io/badge/🌐_Bản_web-Không_cần_cài_app-black?style=for-the-badge&logo=vercel&logoColor=white)](docs/WEB.md)
 
-[![Build iOS](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml/badge.svg?branch=main)](https://github.com/HoangDuc1003/spoti_music/actions/workflows/ios.yml)
+[![Build iOS](https://github.com/HoangDuc1003/music_melo/actions/workflows/ios.yml/badge.svg?branch=main)](https://github.com/HoangDuc1003/music_melo/actions/workflows/ios.yml)
 
 </div>
 
@@ -136,7 +136,7 @@ Chuẩn bị:
 Link source để dán vào SideStore (**Sources → +**):
 
 ```
-https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json
+https://github.com/HoangDuc1003/music_melo/releases/download/ios-latest/source.json
 ```
 
 #### Bước 4: Tự gia hạn 7 ngày (khuyên làm)
@@ -170,7 +170,7 @@ Xong! Từ giờ:
 
 Sau khi thiết lập một lần, mỗi lần cài hay cập nhật chỉ cần:
 
-1. Mở **https://hoangduc1003.github.io/spoti_music/** bằng **Safari**.
+1. Mở **https://hoangduc1003.github.io/music_melo/** bằng **Safari**.
 2. Bấm **Cài đặt Melo**, rồi bấm **Cài đặt**.
 3. Ra màn hình chính chờ app tải xong.
 
@@ -219,7 +219,7 @@ sequenceDiagram
 ## 📂 Cấu trúc dự án
 
 ```
-spoti_music/
+music_melo/
 ├── src/                        # Giao diện + logic (React, TypeScript)
 │   ├── pages/                  # Trang chủ, Tìm kiếm, Thư viện, Album, Nghệ sĩ, Đã tải, Cài đặt
 │   ├── components/             # Trình phát mini/toàn màn hình, hàng chờ, lời bài hát, menu bài
@@ -258,8 +258,8 @@ spoti_music/
 ## 🚀 Chạy trên máy tính (cho người phát triển)
 
 ```bash
-git clone https://github.com/HoangDuc1003/spoti_music.git
-cd spoti_music
+git clone https://github.com/HoangDuc1003/music_melo.git
+cd music_melo
 npm install
 
 npm run dev:mock   # dữ liệu mẫu, không cần YouTube: http://localhost:5173
@@ -269,7 +269,7 @@ npm run build      # kiểm tra kiểu + build
 cd plugins/player && swift test   # test hàng chờ native (macOS/Linux)
 ```
 
-- Không có Mac vẫn build được: mỗi lần push, GitHub Actions build `Melo.ipa` và đăng lên [Releases](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest).
+- Không có Mac vẫn build được: mỗi lần push, GitHub Actions build `Melo.ipa` và đăng lên [Releases](https://github.com/HoangDuc1003/music_melo/releases/tag/ios-latest).
 - Muốn mở bản dev từ iPhone cùng Wi‑Fi: `MELO_LAN=1 npm run dev`. Lưu ý lệnh này mở cả proxy dev ra mạng LAN.
 - Chụp lại ảnh cho README: `scripts/readme-shots.mjs` và `scripts/install-illustrations.mjs`.
 

@@ -8,7 +8,7 @@ import { cancelGoogleLogin, connectGoogle, disconnectGoogle, setYouTubeAutoSync,
 import { copyText, runAction } from '@/ui/overlays';
 import { openExternal, syncDetail } from './settings-shared';
 
-const GUIDE_URL = 'https://github.com/HoangDuc1003/spoti_music/blob/main/docs/GOOGLE.md';
+const GUIDE_URL = 'https://github.com/HoangDuc1003/music_melo/blob/main/docs/GOOGLE.md';
 
 const inputClass = 'mt-2 w-full rounded-lg bg-black/40 px-3 py-2.5 font-mono text-[13px] text-white outline-none placeholder:text-white/30';
 

@@ -21,9 +21,9 @@ Bản web không cần SideStore và không cần máy tính. Bạn mở link b�
 ## Bước 1: Đưa bản web lên Vercel (một lần, khoảng 5 phút)
 
 1. Vào **https://vercel.com**, bấm **Sign Up** rồi chọn **Continue with GitHub**.
-2. Bấm **Add New… → Project**, chọn repo **spoti_music** (hoặc tên mới của repo), bấm **Import**.
+2. Bấm **Add New… → Project**, chọn repo **music_melo**, bấm **Import**.
 3. Không cần sửa gì: Vercel tự đọc file `vercel.json` (lệnh build `npm run build:web`, thư mục `dist-web`). Bấm **Deploy**.
-4. Đợi khoảng 1 phút, Vercel cho bạn một link dạng `https://spoti-music-xxx.vercel.app`.
+4. Đợi khoảng 1 phút, Vercel cho bạn một link dạng `https://music-melo-xxx.vercel.app`.
 
 Từ đó, mỗi lần đẩy code lên nhánh `main`, Vercel tự build lại bản mới. App trên iPhone tự cập nhật ở lần mở sau.
 

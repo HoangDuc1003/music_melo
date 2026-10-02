@@ -8,7 +8,7 @@ import { connectSpotify, disconnectSpotify, importSpotifyExport, setSpotifyAutoS
 import { copyText, runAction, toast } from '@/ui/overlays';
 import { openExternal, syncDetail } from './settings-shared';
 
-const GUIDE_URL = 'https://github.com/HoangDuc1003/spoti_music/blob/main/docs/SPOTIFY.md';
+const GUIDE_URL = 'https://github.com/HoangDuc1003/music_melo/blob/main/docs/SPOTIFY.md';
 
 /** Nhập Client ID của app Spotify tự tạo (lần đầu). */
 function ClientIdSetup({ onDone }: { onDone: () => void }) {

@@ -22,7 +22,8 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
   Vercel (`vercel.json`, no serverless functions — still no backend). Browsers can't call YouTube (CORS), so the web
   flavor has **no YouTube/Spotify**: music = **Jamendo** (Creative Commons API, user's own free Client ID in Settings or
   `VITE_JAMENDO_CLIENT_ID`) + the user's **own audio files**. The iPhone app stays the full version.
-- Repo `HoangDuc1003/spoti_music` is **public**: never commit secrets.
+- Repo `HoangDuc1003/music_melo` (renamed from `spoti_music` on 2026-10-02; old URLs redirect, GitHub Pages does
+  not) is **public**: never commit secrets.
 
 ## Status (2026-10-02, session 2 — 10 closed loops + Spotify sync + refactor pass, CI green each round)
 Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
@@ -41,7 +42,7 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   with secrets `SIGNING_CERT_P12_BASE64` / `SIGNING_CERT_PASSWORD` / `ADHOC_PROFILE_BASE64` in a temp keychain —
   **never run/verified yet**, needs the user's paid account), `release` (only job with `contents: write`; rolling tag
   `ios-latest` with Melo.ipa, icon.png, `source.json` for SideStore/AltStore, plus Melo-adhoc.ipa + manifest.plist when
-  signed), `pages` (continue-on-error; install page at https://hoangduc1003.github.io/spoti_music/ once the user sets
+  signed), `pages` (continue-on-error; install page at https://hoangduc1003.github.io/music_melo/ once the user sets
   Pages source = GitHub Actions). `scripts/release-meta.mjs` generates source.json / manifest.plist / index.html
   (tested in `scripts/release-meta.test.mjs`). Install guide for the user: `docs/CAI_DAT.md`. Public repo ⇒ free macOS
   minutes.

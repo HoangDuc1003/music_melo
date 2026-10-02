@@ -187,7 +187,7 @@ const sideStoreSteps = [
     { tabs: sideTabs('My Apps') }), 'SideStore → My Apps → bấm <b>7 DAYS</b> cạnh SideStore'),
   step(3, phone(`<div class="nav"><span class="nt">Sources</span><span class="row hl" style="position:absolute;right:2px;min-height:26px;padding:0 9px;font-size:20px;color:#6c3df4;border:0">+${tap}</span></div>` +
     group([row('SideStore Team<small>Nguồn mặc định</small>', { icon: glyph('S'), color: '#6c3df4' })]) +
-    group([`<div class="row" style="flex-direction:column;align-items:stretch"><div style="font-weight:600;margin-bottom:6px">Add Source</div><div style="font-size:10.5px;padding:7px 8px;border-radius:7px;background:#eeeef3;color:#333;word-break:break-all">https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json</div></div>`], 'Dán link source của Melo'),
+    group([`<div class="row" style="flex-direction:column;align-items:stretch"><div style="font-weight:600;margin-bottom:6px">Add Source</div><div style="font-size:10.5px;padding:7px 8px;border-radius:7px;background:#eeeef3;color:#333;word-break:break-all">https://github.com/HoangDuc1003/music_melo/releases/download/ios-latest/source.json</div></div>`], 'Dán link source của Melo'),
     { tabs: sideTabs('Sources') }), 'Sources → <b>+</b> → dán link <b>source.json</b> của Melo'),
   step(4, phone(`<div style="text-align:center;padding-top:26px"><img src="${meloIcon}" style="width:86px;height:86px;border-radius:20px" alt="">
       <div style="font-size:21px;font-weight:700;margin-top:10px">Melo</div><div style="color:#8e8e93;font-size:12px">HoangDuc1003</div>
@@ -234,7 +234,7 @@ try {
   }
 
   // Trang cài đặt thật (GitHub Pages) ở khổ iPhone, có cả nút cài 1 chạm Ad Hoc.
-  const base = 'https://hoangduc1003.github.io/spoti_music';
+  const base = 'https://hoangduc1003.github.io/music_melo';
   writeFileSync(join(tmp, 'icon.png'), readFileSync('docs/icon-512.png'));
   writeFileSync(
     join(tmp, 'index.html'),

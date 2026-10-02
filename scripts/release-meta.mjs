@@ -11,7 +11,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const BUNDLE_ID = 'com.melo.music';
-const REPO_URL = 'https://github.com/HoangDuc1003/spoti_music';
+const REPO_URL = 'https://github.com/HoangDuc1003/music_melo';
 
 function parseArgs(argv) {
   const args = {};

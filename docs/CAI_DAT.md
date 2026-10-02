@@ -60,7 +60,7 @@ iloader tự đặt sẵn pairing file nên không phải làm tay.
 ### 4. Cài Melo (một lần)
 
 1. SideStore → **Sources** → **+** → dán:
-   `https://github.com/HoangDuc1003/spoti_music/releases/download/ios-latest/source.json`
+   `https://github.com/HoangDuc1003/music_melo/releases/download/ios-latest/source.json`
    Hoặc mở trang cài đặt (khi đã bật GitHub Pages, xem Cách 2 bước 5) và bấm **Thêm vào SideStore**.
 2. Trong source **Melo**, bấm **Get**.
 
@@ -87,7 +87,7 @@ SideStore tự gia hạn app khi chạy nền. Để chắc chắn hơn, tạo m
 
 ### Cách khác
 
-* Cài thẳng file: iloader có mục nhập IPA bất kỳ. Tải **Melo.ipa** ở [Releases](https://github.com/HoangDuc1003/spoti_music/releases/tag/ios-latest) rồi cài từ PC. Cách này mỗi 7 ngày phải cắm máy tính lại, nên chỉ hợp để thử nhanh.
+* Cài thẳng file: iloader có mục nhập IPA bất kỳ. Tải **Melo.ipa** ở [Releases](https://github.com/HoangDuc1003/music_melo/releases/tag/ios-latest) rồi cài từ PC. Cách này mỗi 7 ngày phải cắm máy tính lại, nên chỉ hợp để thử nhanh.
 * **TrollStore** cài vĩnh viễn, nhưng chỉ chạy trên iOS 14.0 – 16.6.1, 16.7 RC và 17.0. Không chạy trên iOS 17.0.1 trở lên, kể cả iOS 18 và 26.
 
 ---
@@ -167,7 +167,7 @@ Khi bật, GitHub tạo môi trường `github-pages` và mặc định chỉ ch
 ### Bước 6: Build và cài
 
 1. Vào **Actions → iOS → Run workflow**, hoặc đẩy code mới lên.
-2. Khi chạy xong, mở **https://hoangduc1003.github.io/spoti_music/** bằng **Safari** trên iPhone.
+2. Khi chạy xong, mở **https://hoangduc1003.github.io/music_melo/** bằng **Safari** trên iPhone.
 3. Bấm **Cài đặt Melo** → **Cài đặt**.
 
 App hiện trên màn hình chính, không cần SideStore và không hết hạn sau 7 ngày. Ad Hoc không cần bật Chế độ nhà phát triển.
