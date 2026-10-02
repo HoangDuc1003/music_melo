@@ -5,6 +5,7 @@ import { removeFromPlaylist, useIsLiked } from '@/lib/library';
 import { addToQueue, playNext, playRadio, removeAt } from '@/player/controller';
 import { usePlayer } from '@/player/store';
 import { navigate } from '@/ui/nav';
+import { canDownload } from '@/youtube/stream';
 import { closePlayer, closeTrackMenu, openPlaylistPicker, runAction, toggleLikeWithToast, useOverlays } from '@/ui/overlays';
 import { TrackArtwork } from './TrackArtwork';
 import { Sheet, SheetItem } from './Sheet';
@@ -50,7 +51,7 @@ export function TrackMenu() {
             }}
           />
           <SheetItem icon={<ListPlus size={22} />} label="Thêm vào playlist" onClick={() => openPlaylistPicker([track])} />
-          {!download && (
+          {!download && canDownload(track.id) && (
             <SheetItem icon={<ArrowDownToLine size={22} />} label="Tải về" onClick={() => run(() => enqueueDownloads([track]), 'Đang tải về máy')} />
           )}
           {download?.status === 'error' && (

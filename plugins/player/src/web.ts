@@ -1,13 +1,19 @@
-// Bản web của plugin (dùng thẻ <audio>): để thử giao diện trên PC, và là trình phát của Melo bản web (PWA).
+// Bản web của plugin: để thử giao diện trên PC, và là trình phát của Melo bản web (PWA).
 // Cố ý mô phỏng đúng hành vi của bản Swift (hàng chờ, needsUrl, lặp lại, hẹn giờ).
+// Phát bằng thẻ <audio>, riêng link "youtube:<id>" phát bằng trình phát YouTube nhúng (engines.ts, youtube-engine.ts).
 // Màn hình khoá / Trung tâm điều khiển của iPhone dùng Media Session (tên bài, ảnh bìa, nút phát/chuyển bài).
 import { WebPlugin } from '@capacitor/core';
 import type { MeloPlayerPlugin, PlayerItem, PlayerState, RepeatMode, SetQueueOptions } from './definitions';
+import { AudioEngine, type Engine, type EngineEvents } from './engines';
+import { YOUTUBE_SCHEME, YouTubeEngine } from './youtube-engine';
 
 const secureKey = (key: string) => `melo.secure.${key}`;
 
 export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
-  private readonly audio: HTMLAudioElement;
+  private readonly audio: AudioEngine;
+  private youtube?: YouTubeEngine;
+  /** máy phát của bài hiện tại */
+  private engine: Engine;
   private items: PlayerItem[] = [];
   private index = -1;
   private repeat: RepeatMode = 'off';
@@ -22,20 +28,30 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
 
   constructor() {
     super();
-    this.audio = new Audio();
-    this.audio.preload = 'auto';
-    const emit = () => this.emitState();
-    this.audio.addEventListener('playing', emit);
-    this.audio.addEventListener('pause', emit);
-    this.audio.addEventListener('waiting', emit);
-    this.audio.addEventListener('durationchange', emit);
-    this.audio.addEventListener('seeked', emit);
-    this.audio.addEventListener('timeupdate', () => {
-      if (Date.now() - this.lastStateEmit > 900) this.emitState();
-    });
-    this.audio.addEventListener('ended', () => this.handleEnded());
-    this.audio.addEventListener('error', () => this.handleError());
+    const audio: AudioEngine = new AudioEngine(this.listen(() => audio));
+    this.audio = audio;
+    this.engine = audio;
     this.setupMediaSession();
+  }
+
+  /** Sự kiện của một máy phát; bỏ qua sự kiện của máy phát không còn dùng (ví dụ <audio> sau khi chuyển sang YouTube). */
+  private listen(engine: () => Engine): EngineEvents {
+    const active = () => engine() === this.engine;
+    return {
+      change: () => active() && this.emitState(),
+      tick: () => active() && Date.now() - this.lastStateEmit > 900 && this.emitState(),
+      ended: () => active() && this.handleEnded(),
+      error: (message, retryable) => active() && this.handleError(message, retryable)
+    };
+  }
+
+  private engineFor(src: string): Engine {
+    if (!src.startsWith(YOUTUBE_SCHEME)) return this.audio;
+    if (!this.youtube) {
+      const youtube: YouTubeEngine = new YouTubeEngine(this.listen(() => youtube));
+      this.youtube = youtube;
+    }
+    return this.youtube;
   }
 
   private setupMediaSession() {
@@ -85,13 +101,14 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
   }
 
   private buildState(): PlayerState {
-    const duration = Number.isFinite(this.audio.duration) ? this.audio.duration : (this.current?.duration ?? 0);
+    const known = this.engine.duration;
+    const duration = Number.isFinite(known) && known > 0 ? known : (this.current?.duration ?? 0);
     return {
       index: this.index,
       id: this.current?.id,
-      playing: !this.audio.paused && !this.waitingForUrl,
-      buffering: this.waitingForUrl || this.audio.readyState < 3,
-      position: this.waitingForUrl ? this.resumeAt : this.audio.currentTime || 0,
+      playing: !this.engine.paused && !this.waitingForUrl,
+      buffering: this.waitingForUrl || this.engine.buffering,
+      position: this.waitingForUrl ? this.resumeAt : this.engine.currentTime,
       duration,
       repeat: this.repeat,
       queueLength: this.items.length,
@@ -111,7 +128,7 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
     this.index = index;
     const item = this.current;
     if (!item) {
-      this.audio.pause();
+      this.engine.pause();
       this.emitState();
       return;
     }
@@ -122,18 +139,18 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
       this.waitingForUrl = true;
       this.resumeAt = position;
       this.playWhenReady = play;
-      this.audio.pause();
-      this.audio.removeAttribute('src');
+      this.engine.stop();
       this.notifyListeners('needsUrl', { index, id: item.id, reason: 'missing' });
       this.emitState();
       return;
     }
     this.waitingForUrl = false;
-    this.audio.src = src;
-    if (position > 0) {
-      this.audio.addEventListener('loadedmetadata', () => (this.audio.currentTime = position), { once: true });
+    const engine = this.engineFor(src);
+    if (engine !== this.engine) {
+      this.engine.stop();
+      this.engine = engine;
     }
-    if (play) void this.audio.play().catch(() => this.emitState());
+    engine.load(src, position, play);
     this.emitState();
   }
 
@@ -141,7 +158,7 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
     if (this.index + 1 < this.items.length) return this.load(this.index + 1);
     if (this.repeat === 'all' && this.items.length) return this.load(0);
     if (!manual) this.notifyListeners('queueEnded', {});
-    this.audio.pause();
+    this.engine.pause();
     this.emitState();
   }
 
@@ -152,26 +169,27 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
       return;
     }
     if (this.repeat === 'one') {
-      this.audio.currentTime = 0;
-      void this.audio.play();
+      this.engine.seek(0);
+      void this.engine.play();
       return;
     }
     this.advance(false);
   }
 
-  private handleError() {
+  /** `retryable`: lỗi của link (có thể đã hết hạn) → xin link mới một lần; lỗi khác (video YouTube bị chặn…) thì bỏ qua bài. */
+  private handleError(message: string, retryable: boolean) {
     const item = this.current;
     if (!item || this.waitingForUrl) return;
-    if (!this.retried.has(item.id)) {
+    if (retryable && !this.retried.has(item.id)) {
       this.retried.add(item.id);
       this.waitingForUrl = true;
-      this.resumeAt = this.audio.currentTime || 0;
+      this.resumeAt = this.engine.currentTime;
       this.playWhenReady = true;
       this.notifyListeners('needsUrl', { index: this.index, id: item.id, reason: 'failed' });
       this.emitState();
       return;
     }
-    this.notifyListeners('error', { index: this.index, id: item.id, message: this.audio.error?.message || 'Không phát được bài này' });
+    this.notifyListeners('error', { index: this.index, id: item.id, message });
     this.advance(false);
   }
 
@@ -201,12 +219,11 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
     this.items.splice(index, 1);
     if (index < this.index) this.index -= 1;
     else if (index === this.index) {
-      const wasPlaying = !this.audio.paused;
+      const wasPlaying = !this.engine.paused;
       if (this.index < this.items.length) this.load(this.index, 0, wasPlaying);
       else if (this.items.length) this.load(this.items.length - 1, 0, false);
       else {
-        this.audio.pause();
-        this.audio.removeAttribute('src');
+        this.engine.stop();
         this.index = -1;
       }
     }
@@ -242,19 +259,19 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
       return;
     }
     if (this.index === -1 && this.items.length) return this.load(0);
-    await this.audio.play().catch(() => undefined);
+    await this.engine.play();
     this.emitState();
   }
 
   async pause(): Promise<void> {
     this.playWhenReady = false;
-    this.audio.pause();
+    this.engine.pause();
     this.emitState();
   }
 
   async seekTo(options: { position: number }): Promise<void> {
     if (this.waitingForUrl) this.resumeAt = options.position;
-    else this.audio.currentTime = options.position;
+    else this.engine.seek(options.position);
     this.emitState();
   }
 
@@ -267,8 +284,8 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
   }
 
   async previous(): Promise<void> {
-    if (this.audio.currentTime > 3 || this.index <= 0) {
-      this.audio.currentTime = 0;
+    if (this.engine.currentTime > 3 || this.index <= 0) {
+      this.engine.seek(0);
       this.emitState();
       return;
     }

@@ -1,7 +1,7 @@
 // Bản giả của src/sync/youtube-api.ts cho `npm run dev:mock`: playlist và bài đã thích lấy từ dữ liệu mẫu.
 import { TRACKS } from '@/youtube/mock/fixtures';
 import type { Track } from '@/youtube/types';
-export { isoDuration, YouTubeApiError, type YouTubePlaylist } from '../youtube-api';
+export { YouTubeApiError, type YouTubePlaylist } from '../youtube-api';
 
 const delay = <T>(value: T, ms = 400) => new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
 

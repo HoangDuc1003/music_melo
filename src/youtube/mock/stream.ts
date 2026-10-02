@@ -52,6 +52,9 @@ function isFresh(audio: ResolvedAudio | undefined): audio is ResolvedAudio {
   return Boolean(audio && audio.expiresAt > Date.now());
 }
 
+/** Mọi bài YouTube đều tải về được trong app iPhone (bản web: chỉ bài Audius/Jamendo). */
+export const canDownload = (_id: string) => true;
+
 export function getCachedAudio(videoId: string): ResolvedAudio | undefined {
   const audio = cache.get(videoId);
   return isFresh(audio) ? audio : undefined;

@@ -44,7 +44,6 @@ vi.mock('@/youtube/http', () => ({
 }));
 
 import { db } from '@/lib/db';
-import { isoDuration } from './youtube-api';
 import { __resetGoogleAuthForTests } from './google-auth';
 import { __resetYouTubeSyncForTests, disconnectGoogle, syncYouTube, useYouTubeSync, YT_LIKED_NAME } from './youtube-sync';
 
@@ -72,13 +71,6 @@ beforeEach(async () => {
 });
 
 describe('đồng bộ YouTube', () => {
-  it('thời lượng ISO 8601', () => {
-    expect(isoDuration('PT3M5S')).toBe(185);
-    expect(isoDuration('PT1H2M5S')).toBe(3725);
-    expect(isoDuration('P1DT1S')).toBe(86401);
-    expect(isoDuration(undefined)).toBe(0);
-  });
-
   it('playlist của bạn (mọi trang) + bài đã thích thuộc thể loại Âm nhạc; bỏ video đã xoá/riêng tư', async () => {
     await syncYouTube();
     expect(useYouTubeSync.getState()).toMatchObject({ syncing: false, error: undefined, lastResult: '2 playlist • 1 bài đã thích' });

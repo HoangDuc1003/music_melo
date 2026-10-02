@@ -105,6 +105,10 @@ export function HomePage() {
       {__WEB_APP__ && home.data && (
         <p className="px-4 pt-8 text-center text-[12px] text-subdued">
           Nhạc từ{' '}
+          <a className="underline" href="https://www.youtube.com" target="_blank" rel="noopener noreferrer">
+            YouTube
+          </a>
+          ,{' '}
           <a className="underline" href="https://audius.co" target="_blank" rel="noopener noreferrer">
             Audius
           </a>{' '}

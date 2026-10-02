@@ -1,5 +1,6 @@
 // Chạy thử Melo bản web: `npm run build:web && npx vite preview --mode web --outDir dist-web --port 4175`, rồi
-// `npm i --no-save playwright && CHROMIUM_PATH=… node scripts/web-smoke.mjs`. Audius và Jamendo được giả bằng context.route.
+// `npm i --no-save playwright && CHROMIUM_PATH=… node scripts/web-smoke.mjs`. YouTube (Data API + trình phát nhúng), Audius và
+// Jamendo được giả bằng context.route.
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 mkdirSync('web-smoke-shots', { recursive: true });
@@ -75,6 +76,40 @@ await context.route('https://api.audius.co/**', (route) => {
   else if (path.startsWith('/tracks/') && !['/tracks/trending', '/tracks/search'].includes(path)) data = AU_TRACKS.find((t) => path === `/tracks/${t.id}`);
   return route.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ data }) });
 });
+// YouTube: Data API giả + trình phát nhúng giả (iframe_api định nghĩa window.YT, khung /embed là trang trống).
+const YT_KEY = `AIza${'S'.repeat(35)}`;
+const ytVideo = (id, title) => ({
+  id, snippet: { title, channelTitle: 'Sơn Tùng M-TP Official', channelId: 'UCson', thumbnails: {} },
+  contentDetails: { duration: 'PT2S' }, status: { embeddable: true, privacyStatus: 'public' }
+});
+const YT_VIDEOS = Object.fromEntries([ytVideo('aaaaaaaaaaa', 'Lạc Trôi | Official MV'), ytVideo('bbbbbbbbbbb', 'Chúng Ta Của Hiện Tại'), ytVideo('ccccccccccc', 'Hậu trường quay MV')].map((v) => [v.id, v]));
+let youtubeCalls = 0;
+await context.route('https://www.googleapis.com/youtube/v3/**', (route) => {
+  youtubeCalls += 1;
+  const url = new URL(route.request().url());
+  const json = (body, status = 200) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify(body) });
+  if (url.searchParams.get('key') !== YT_KEY) return json({ error: { code: 400, message: 'API key not valid', errors: [{ reason: 'keyInvalid' }] } }, 400);
+  const path = url.pathname.replace('/youtube/v3', '');
+  if (path === '/videos' && url.searchParams.get('chart')) return json({ items: [YT_VIDEOS.aaaaaaaaaaa, YT_VIDEOS.bbbbbbbbbbb] });
+  if (path === '/videos') return json({ items: url.searchParams.get('id').split(',').map((id) => YT_VIDEOS[id]).filter(Boolean) });
+  if (path === '/search') return json({ items: [{ id: { videoId: url.searchParams.get('videoCategoryId') ? 'aaaaaaaaaaa' : 'ccccccccccc' } }] });
+  return json({ items: [] });
+});
+const FAKE_IFRAME_API = `window.YT = { Player: class {
+  constructor(frame, { events }) { this.events = events; this.t = 0; setTimeout(() => events.onReady(), 50); }
+  set(state) { this.events.onStateChange({ data: state }); }
+  loadVideoById() { setTimeout(() => this.set(1), 80); }
+  cueVideoById() { this.set(5); }
+  playVideo() { setTimeout(() => this.set(1), 50); }
+  pauseVideo() { this.set(2); }
+  stopVideo() {}
+  seekTo(t) { this.t = t; }
+  getCurrentTime() { return this.t; }
+  getDuration() { return 2; }
+} };
+window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady();`;
+await context.route('https://www.youtube.com/iframe_api', (route) => route.fulfill({ contentType: 'text/javascript', body: FAKE_IFRAME_API }));
+await context.route('https://www.youtube.com/embed/**', (route) => route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#400;color:#fff">YouTube giả</body>' }));
 await context.route('https://lrclib.net/**', (route) => route.fulfill({ status: 404, headers: cors, body: '{}' }));
 
 const playing = () => page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === 'Tạm dừng'), null, { timeout: 10000 });
@@ -108,28 +143,70 @@ await v(page.getByLabel('Client ID Jamendo')).fill('abcd1234');
 await v(page.getByRole('button', { name: 'Lưu', exact: true })).click();
 await v(page.getByText(/Đã có Client ID/)).waitFor();
 if (await page.getByText('Spotify').filter({ visible: true }).count()) throw new Error('bản web không được có mục Spotify');
+await v(page.getByText('YouTube (tuỳ chọn)')).click();
+await v(page.getByLabel('Khoá API YouTube')).fill(YT_KEY);
+await v(page.getByRole('button', { name: 'Lưu', exact: true })).click();
+await v(page.getByText(/Đã có khoá API/)).waitFor();
 await shot('3-cai-dat');
-ok('Cài đặt: Audius luôn bật; nhập Client ID Jamendo (tuỳ chọn); không có mục Spotify');
+ok('Cài đặt: Audius luôn bật; nhập Client ID Jamendo và khoá API YouTube (tuỳ chọn); không có mục Spotify');
 
 await v(page.getByRole('button', { name: 'Trang chủ', exact: true })).click();
 await wait(300);
 await v(page.getByRole('button', { name: 'Trang chủ', exact: true })).click();
 await v(page.getByText('Thịnh hành trên Jamendo')).waitFor({ timeout: 10000 });
-await shot('4-trang-chu-hai-nguon');
-ok('trang chủ có thêm các hàng Jamendo');
+await v(page.getByText('Nhạc thịnh hành trên YouTube')).waitFor();
+await shot('4-trang-chu-ba-nguon');
+ok('trang chủ có thêm các hàng YouTube (thịnh hành) và Jamendo');
+
+// Video YouTube: phát trong khung trên cùng, trang bị đẩy xuống (không che video), không có "Tải về".
+await v(page.getByText('Lạc Trôi | Official MV')).click();
+await playing();
+await page.locator('#melo-video-slot iframe').waitFor();
+const layout = () =>
+  page.evaluate(() => {
+    const stage = document.getElementById('melo-video-slot').closest('.fixed').getBoundingClientRect();
+    const main = document.querySelector('main').getBoundingClientRect();
+    return { stageBottom: Math.round(stage.bottom), mainTop: Math.round(main.top), videoH: getComputedStyle(document.documentElement).getPropertyValue('--video-h') };
+  });
+let box = await layout();
+if (box.stageBottom < 200 || box.mainTop < box.stageBottom - 1) throw new Error(`khung video che trang: ${JSON.stringify(box)}`);
+await shot('5-video-youtube');
+ok(`phát video YouTube trong khung trên cùng (cao ${box.stageBottom}px), trang nằm dưới khung`);
+
+await v(page.locator('.rounded-lg.shadow-lg')).click();
+await v(page.getByRole('button', { name: 'Tuỳ chọn' })).click();
+await v(page.getByText('Phát tiếp')).waitFor();
+if (await page.getByText('Tải về', { exact: true }).filter({ visible: true }).count()) throw new Error('video YouTube không được có "Tải về"');
+const sheetTop = await page.evaluate(() => Math.round(document.querySelector('[aria-label="Tuỳ chọn bài hát"]').getBoundingClientRect().top));
+if (sheetTop < box.stageBottom - 1) throw new Error('bảng chọn che video');
+await shot('6-video-menu');
+await page.keyboard.press('Escape');
+await page.mouse.click(195, box.stageBottom + 20);
+await wait(400);
+await v(page.getByRole('button', { name: 'Thu nhỏ' })).click();
+await wait(400);
+ok('trình phát to và bảng chọn nằm dưới khung video; video YouTube không có "Tải về"');
+
+await v(page.getByText('Ẩn video')).click();
+await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--video-h').trim() === '0px', null, { timeout: 5000 });
+await v(page.getByRole('button', { name: 'Phát', exact: true })).waitFor();
+ok('Ẩn video: dừng phát rồi mới thu khung');
 
 await v(page.getByText('Gió Chiều')).click();
 await playing();
 ok('phát bài từ Jamendo (đang phát)');
 
-// Tìm kiếm: không có tab Video
+// Tìm kiếm: bài hát từ cả ba nguồn; tab Video chỉ có YouTube
 await v(page.getByRole('button', { name: 'Tìm kiếm', exact: true })).click();
 await v(page.getByPlaceholder(/Bạn muốn nghe gì/)).fill('gió');
 await page.keyboard.press('Enter');
 await v(page.getByText('Mưa Đêm Lounge')).waitFor();
 await v(page.getByText('Đêm Sài Gòn Mới')).waitFor();
-if (await page.getByRole('button', { name: 'Video', exact: true }).filter({ visible: true }).count()) throw new Error('không được có tab Video');
-ok('tìm kiếm: kết quả của cả Audius và Jamendo, không có tab Video');
+await v(page.getByText('Lạc Trôi | Official MV')).waitFor();
+await v(page.getByRole('button', { name: 'Video', exact: true })).click();
+await v(page.getByText('Hậu trường quay MV')).waitFor();
+await v(page.getByRole('button', { name: 'Bài hát', exact: true })).click();
+ok('tìm kiếm: kết quả của YouTube, Audius và Jamendo; tab Video có video YouTube');
 
 // Tải album
 await v(page.getByRole('button', { name: 'Album', exact: true })).click();
@@ -181,7 +258,7 @@ if (await page.getByText(/không phát được|Không phát được/).filter({
 ok('mất mạng: phát bài Audius đã tải');
 
 await context.setOffline(false);
-console.log(`   Audius được gọi ${audiusCalls} lần, Jamendo ${jamendoCalls} lần`);
+console.log(`   YouTube được gọi ${youtubeCalls} lần, Audius ${audiusCalls} lần, Jamendo ${jamendoCalls} lần`);
 if (errors.length) {
   console.log(errors.join('\n'));
   process.exit(1);

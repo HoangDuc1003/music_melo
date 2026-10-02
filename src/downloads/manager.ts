@@ -9,7 +9,7 @@ import { errorMessage, log } from '@/lib/log';
 import { getLyrics } from '@/lib/lyrics';
 import { isOnline, useNetwork } from '@/lib/network';
 import { refreshLocalFile, setArtworkFileProvider, setFileUrlProvider } from '@/player/controller';
-import { resolveAudio } from '@/youtube/stream';
+import { canDownload, resolveAudio } from '@/youtube/stream';
 import type { Track } from '@/youtube/types';
 import { AdaptiveLimiter, classifyFailure, HARD_MAX } from './concurrency';
 import { getStorage, SAFE_ID, withRange, type DownloadProgress } from './storage';
@@ -281,9 +281,9 @@ async function loadSettings() {
   applyLimits();
 }
 
-/** Thêm bài vào hàng đợi tải; bỏ qua bài đã tải/đang tải. Trả về số bài mới thêm. */
+/** Thêm bài vào hàng đợi tải; bỏ qua bài đã tải/đang tải và bài không tải được (video YouTube ở bản web). Trả về số bài mới thêm. */
 export async function enqueueDownloads(tracks: Track[]): Promise<number> {
-  const valid = [...new Map(tracks.filter((t) => SAFE_ID.test(t.id)).map((t) => [t.id, t])).values()];
+  const valid = [...new Map(tracks.filter((t) => SAFE_ID.test(t.id) && canDownload(t.id)).map((t) => [t.id, t])).values()];
   if (!valid.length) return 0;
   await rememberTracks(valid);
   const now = Date.now();

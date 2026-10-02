@@ -6,6 +6,7 @@ import { playTracks } from '@/player/controller';
 import type { PlayContext } from '@/player/queue';
 import { useArtworkColor } from '@/ui/hooks';
 import { confirmAction, runAction, toast, type TrackMenuTarget } from '@/ui/overlays';
+import { canDownload } from '@/youtube/stream';
 import type { Track } from '@/youtube/types';
 import { Artwork } from './Artwork';
 import { Page } from './Page';
@@ -51,16 +52,18 @@ export function CollectionView({
 }: Props) {
   const color = useArtworkColor(artwork, title);
   const total = tracks.reduce((sum, t) => sum + (t.duration || 0), 0);
-  const downloaded = useDownloads((s) => tracks.filter((t) => s.rows.get(t.id)?.status === 'done').length);
-  const pending = useDownloads((s) => tracks.filter((t) => ['queued', 'downloading'].includes(s.rows.get(t.id)?.status ?? '')).length);
-  const allDownloaded = tracks.length > 0 && downloaded === tracks.length;
+  // Video YouTube ở bản web không tải được: nút "Tải tất cả" chỉ tính các bài tải được.
+  const downloadable = tracks.filter((t) => canDownload(t.id));
+  const downloaded = useDownloads((s) => downloadable.filter((t) => s.rows.get(t.id)?.status === 'done').length);
+  const pending = useDownloads((s) => downloadable.filter((t) => ['queued', 'downloading'].includes(s.rows.get(t.id)?.status ?? '')).length);
+  const allDownloaded = downloadable.length > 0 && downloaded === downloadable.length;
 
   const onDownload = () => {
     if (allDownloaded) {
-      confirmAction('Xoá các bài đã tải của danh sách này khỏi máy?', () => removeDownloads(tracks.map((t) => t.id)), 'Đã xoá bản tải');
+      confirmAction('Xoá các bài đã tải của danh sách này khỏi máy?', () => removeDownloads(downloadable.map((t) => t.id)), 'Đã xoá bản tải');
     } else {
       void runAction(async () => {
-        const n = await enqueueDownloads(tracks);
+        const n = await enqueueDownloads(downloadable);
         toast(n ? `Đang tải ${n} bài về máy` : 'Các bài đang được tải');
       });
     }
@@ -84,7 +87,7 @@ export function CollectionView({
       </div>
       <div className="flex items-center gap-2 px-4 pt-3 pb-2">
         <div className="flex flex-1 items-center gap-1">
-          {tracks.length > 0 && !hideDownload && (
+          {downloadable.length > 0 && !hideDownload && (
             <button
               className={`relative p-2 active:scale-90 ${allDownloaded ? 'text-accent' : 'text-subdued'}`}
               aria-label={allDownloaded ? 'Đã tải tất cả (bấm để xoá)' : 'Tải tất cả'}

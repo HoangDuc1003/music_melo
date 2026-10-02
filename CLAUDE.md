@@ -19,11 +19,13 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
 - Most reference apps are GPL: learn ideas only, never copy code.
 - `appId` `com.melo.music` must never change (downloads live in the app container).
 - **Web flavor (PWA, 2026-10-02, user-approved):** same React app built with `vite --mode web` for static hosting on
-  Vercel (`vercel.json`, no serverless functions — still no backend). Browsers can't call YouTube (CORS), so the web
-  flavor has **no YouTube/Spotify**: music = **Audius** (open API, no key, CORS, full tracks — main source since
-  2026-10-02, the user asked for newer/more songs) + **Jamendo** (optional, user's own free Client ID in Settings or
-  `VITE_JAMENDO_CLIENT_ID`) + the user's **own audio files**. Neither has major-label hits (V-pop/US-UK): those only
-  exist in the iPhone app (YouTube Music). The iPhone app stays the full version.
+  Vercel (`vercel.json`, no serverless functions — still no backend). Browsers can't fetch YouTube media (CORS), so
+  the web flavor has **no YouTube downloads and no Spotify**. Music = **YouTube** (user-approved 2026-10-02: the user
+  could not find the music videos they wanted; search via Data API v3 with the user's own API key, playback **only**
+  through the official IFrame player shown on screen — online only, no background, no download, per YouTube ToS) +
+  **Audius** (open API, no key, CORS, full tracks, downloadable) + **Jamendo** (optional Client ID in Settings or
+  `VITE_JAMENDO_CLIENT_ID`) + the user's **own audio files**. Audius/Jamendo have no major-label hits. The iPhone app
+  stays the full version (YouTube Music with downloads).
 - Repo `HoangDuc1003/music_melo` (renamed from `spoti_music` on 2026-10-02; old URLs redirect, GitHub Pages does
   not) is **public**: never commit secrets.
 
@@ -130,11 +132,33 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
 - `npm run dev:mock` (aliases `@/youtube/{music,stream,http}` → `src/youtube/mock/`, `@/sync/spotify-{auth,api}` →
   `src/sync/mock/`) for UI work without YouTube/Spotify.
 - **Web flavor** `src/web/` (user guide `docs/WEB.md`): `--mode web` aliases `@/youtube/{music,stream,http,client}` →
-  `src/web/*` and defines `__WEB_APP__` (compile-time; UI gates: Spotify section → "Nguồn nhạc", no Video search tab,
-  "Thêm nhạc từ máy" in Library, web texts). `music.ts` merges sources: Home = Audius shelves then Jamendo shelves (only
-  with a client ID; titles must stay distinct, they are React keys), search = both in parallel, alternated (one failing
-  → the other; both → Audius error), album/artist/playlist/radio dispatch on id prefix (`au-` Audius, else Jamendo;
-  `lf-` = local file, no radio). `audius.ts` (`https://api.audius.co/v1`, `app_name=Melo`, response `{data}`; anonymous
+  `src/web/*` and defines `__WEB_APP__` (compile-time; UI gates: Spotify section → "Nguồn nhạc", "Thêm nhạc từ máy" in
+  Library, `VideoStage`, web texts). `music.ts` merges sources in order YouTube (only with an API key) → Audius →
+  Jamendo (only with a client ID): Home shelves concatenated (titles must stay distinct, they are React keys), search =
+  all in parallel, alternated by `alternate()`; a failing source is skipped and a `YouTubeError` is toasted (max once /
+  10 min per message), all failing → first error; Video tab = YouTube only; suggestions never call YouTube (quota).
+  Pages/radio dispatch on id prefix (`yt-` YouTube, `au-` Audius, else Jamendo; `lf-` = local file, no radio).
+  **YouTube** (`youtube.ts`): key from setting `youtubeApiKey` or `VITE_YOUTUBE_API_KEY` (`AIza` + 35), every fetch
+  uses `referrerPolicy: 'strict-origin-when-cross-origin'` (vercel.json sends `Referrer-Policy: no-referrer`, website-
+  restricted keys need the origin); ids `yt-<videoId|UC…|PL…>`, tracks `isVideo`; Home = `videos?chart=mostPopular`
+  category 10 VN + US (1 unit each); search = `search` (100 units, `videoEmbeddable`/`videoSyndicated`, category 10
+  for songs) + `videos` (1 unit, drops non-embeddable/private/live); channel = `channels` → uploads playlist
+  (`playlistItems`) → `videos` with statistics; playlist ≤ 200 items; radio = seed + same-channel uploads alternated
+  with the VN chart (related-videos API is gone); errors via `apiErrorReason` → Vietnamese (`quotaExceeded`,
+  `keyInvalid`, `API_KEY_HTTP_REFERRER_BLOCKED`, `accessNotConfigured`; setup ones have `needsSetup`); no key + pasted
+  video link → `bareTrack` still plays. Stream URL `youtube:<id>`; `canDownload(id)` (exported by every
+  `@/youtube/stream` flavor; native/mock always true) is false for `yt-` → `enqueueDownloads` skips them, TrackMenu
+  hides "Tải về", CollectionView counts only downloadable tracks. Player: `plugins/player/src/web.ts` picks an engine
+  per item (`engines.ts` `AudioEngine` = `<audio>`, `youtube-engine.ts` `YouTubeEngine` = one IFrame API player reused
+  for every video, iframe created by us with `referrerpolicy` + `playsinline`, mounted in `#melo-video-slot`
+  (`VIDEO_SLOT_ID` in definitions.ts) rendered by `src/components/VideoStage.tsx`; requests made before `onReady` are
+  replayed (latest wins); YT errors 100/101/150/152/153 → `error` + skip, no needsUrl retry; events from an inactive
+  engine are ignored). `VideoStage` = fixed top box (safe area + 16:9 video + 36 px strip, z-45), sets CSS var
+  `--video-h`; App root `pt-[var(--video-h)]`, FullPlayer and Sheet `top-[var(--video-h)]` so nothing covers the video
+  (ToS); "Ẩn video" pauses then collapses (height 0, iframe stays mounted); playing/buffering re-opens; hint "Chạm vào
+  video…" after 2.5 s stuck (iOS first-play gesture). Web CSP: `script-src 'self' https://www.youtube.com
+  https://s.ytimg.com`, `frame-src https://www.youtube.com`. Tests: `src/web/youtube.test.ts`,
+  `src/player/web-plugin.test.ts` (fake `window.YT`). `audius.ts` (`https://api.audius.co/v1`, `app_name=Melo`, response `{data}`; anonymous
   limit = 5 req per sliding 1 s per IP → `throttle()` spaces calls 4 per 1.1 s, 429 → retry ×2; ids `au-<hashid>` for
   tracks/users/playlists; gated/paid/deleted tracks filtered by `isPlayable`; Home = trending week, "Mới phát hành"
   (trending week+month released ≤30 days, else ≤90, newest first), rising artists, trending playlists, 5 genres;
@@ -151,9 +175,10 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   `navigator.storage.persist/estimate`). Web CSP drops `'unsafe-eval'` and allows `connect-src https:`. The web player
   (`plugins/player/src/web.ts`) sets Media Session (lock screen). `SAFE_ID` is now `[\w-]{3,64}`; `withRange` only
   touches googlevideo URLs. Verified with unit tests + Playwright against `vite preview` of `dist-web` with
-  `context.route` stubbing api.audius.co / api.jamendo.com / storage (14 steps incl. offline reload via SW; Playwright
-  does not route the request after a fulfilled 302, so the stub serves `/stream` audio directly). **Not verified against
-  real Audius/Jamendo** (container egress blocks both): Jamendo CORS, and whether Audius content nodes answer the
+  `context.route` stubbing googleapis / youtube.com iframe_api + embed / api.audius.co / api.jamendo.com / storage (17
+  steps incl. video stage layout, offline reload via SW; Playwright does not route the request after a fulfilled 302,
+  so the stub serves `/stream` audio directly). **Not verified against real YouTube/Audius/Jamendo** (container egress
+  blocks all three; iOS first-play gesture behaviour of the IFrame player is unknown until the user tries): Jamendo CORS, and whether Audius content nodes answer the
   redirected `fetch()` with CORS (mediorum uses echo `middleware.CORS()`, so it should). The SW matches precached files
   with `ignoreVary: true` (vite preview sends `Vary: Origin`, module scripts send Origin → offline reload was blank
   ~1/4 of the time before the fix).
@@ -214,7 +239,7 @@ TODO (next sessions):
 - `npm run dev` — Vite on :5173 with the YouTube dev proxy (`/__proxy/<host>/…`, see `vite.config.ts`);
   `MELO_LAN=1 npm run dev` to expose it on the LAN. `npm run dev:mock` — sample data, no YouTube needed.
 - `npm run build` — typecheck + build. `npm test` — vitest (jsdom + fake-indexeddb).
-- `npm run dev:web` / `npm run build:web` (→ `dist-web/`, what Vercel runs) — web flavor. Web smoke test (14 steps incl.
+- `npm run dev:web` / `npm run build:web` (→ `dist-web/`, what Vercel runs) — web flavor. Web smoke test (17 steps incl.
   offline reload): `npx vite preview --mode web --outDir dist-web --port 4175`, then `CHROMIUM_PATH=… node scripts/web-smoke.mjs`.
 - `npx cap sync ios` — copy web build + update iOS SPM package list after adding plugins.
 - `cd plugins/player && swift test` — native queue tests (macOS/Linux; CI runs them on every push).

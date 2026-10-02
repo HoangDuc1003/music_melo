@@ -9,6 +9,7 @@ import { PlaylistPicker } from '@/components/PlaylistPicker';
 import { SleepTimerSheet } from '@/components/SleepTimerSheet';
 import { TabBar } from '@/components/TabBar';
 import { Toasts } from '@/components/Toasts';
+import { VideoStage } from '@/components/VideoStage';
 import { TrackMenu } from '@/components/TrackMenu';
 import { log } from '@/lib/log';
 import { ArtistPage } from '@/pages/ArtistPage';
@@ -96,7 +97,8 @@ export default function App() {
   const online = useNetwork((s) => s.online);
 
   return (
-    <div className="flex h-full flex-col bg-base">
+    <div className="flex h-full flex-col bg-base pt-[var(--video-h,0px)]">
+      {__WEB_APP__ && <VideoStage />}
       <EdgeSwipeBack>
         {(Object.keys(stacks) as Tab[]).map((tab) =>
           stacks[tab].map((entry, i) => (

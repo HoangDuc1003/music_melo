@@ -71,7 +71,8 @@ describe('bản web: gộp Audius + Jamendo', () => {
     const suggestions = await getSuggestions('mưa');
     expect(suggestions.queries).toEqual(['mưa rơi', 'audius a1', 'jamendo 1', 'audius a2', 'jamendo 2', 'audius a3']);
     expect(ids(suggestions.items)).toEqual(['au-a1', 'jm-1', 'au-a2']);
-    expect(await search('mưa', 'video')).toEqual([]);
+    // Tab Video chỉ có YouTube: chưa có khoá thì hướng dẫn thêm khoá.
+    await expect(search('mưa', 'video')).rejects.toMatchObject({ needsSetup: true, message: expect.stringMatching(/khoá API YouTube/) });
   });
 
   it('trang album và radio chọn nguồn theo tiền tố id; file tự thêm không có radio', async () => {

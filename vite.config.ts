@@ -73,12 +73,13 @@ function devProxy(): Plugin {
  * - script: chỉ file của app; 'unsafe-eval' bắt buộc cho youtubei.js (giải mã link) và BotGuard (PO token).
  * - connect: mọi request mạng đi qua HTTP native (CapacitorHttp/FileTransfer), WebView không cần gọi ra ngoài.
  * - img/media: ảnh bìa từ máy chủ ảnh của Google (https), ảnh/nhạc đã tải (blob:, capacitor://localhost).
- * Bản web: không có youtubei.js nên bỏ 'unsafe-eval'; trình duyệt tự gọi Jamendo/LRCLIB (https).
+ * Bản web: không có youtubei.js nên bỏ 'unsafe-eval'; trình duyệt tự gọi YouTube Data API/Audius/Jamendo/LRCLIB (https);
+ * video YouTube phát bằng trình phát nhúng chính thức (script iframe_api + khung www.youtube.com).
  */
 function csp(webApp: boolean): string {
   return [
     "default-src 'self'",
-    webApp ? "script-src 'self'" : "script-src 'self' 'unsafe-eval'",
+    webApp ? "script-src 'self' https://www.youtube.com https://s.ytimg.com" : "script-src 'self' 'unsafe-eval'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https:",
     "media-src 'self' blob: https:",
@@ -87,7 +88,7 @@ function csp(webApp: boolean): string {
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
-    "frame-src 'none'",
+    webApp ? "frame-src https://www.youtube.com" : "frame-src 'none'",
     "worker-src 'self' blob:",
     "manifest-src 'self'"
   ].join('; ');

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   setFileUrlProvider: vi.fn(),
   setArtworkFileProvider: vi.fn()
 }));
-vi.mock('@/youtube/stream', () => ({ resolveAudio: mocks.resolveAudio }));
+vi.mock('@/youtube/stream', () => ({ resolveAudio: mocks.resolveAudio, canDownload: (id: string) => !id.startsWith('yt-') }));
 vi.mock('@/lib/lyrics', () => ({ getLyrics: mocks.getLyrics }));
 vi.mock('@/player/controller', () => ({
   refreshLocalFile: mocks.refreshLocalFile,
@@ -167,6 +167,8 @@ describe('hàng đợi tải', () => {
     expect(await enqueueDownloads([track(1)])).toBe(0);
     const bad = { ...track(9), id: '../../etc/passwd' };
     expect(await enqueueDownloads([bad])).toBe(0);
+    // Bài nguồn không cho tải (video YouTube ở bản web) thì bỏ qua.
+    expect(await enqueueDownloads([{ ...track(8), id: 'yt-aaaaaaaaaaa' }])).toBe(0);
     expect(await db.downloads.count()).toBe(1);
   });
 

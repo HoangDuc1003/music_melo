@@ -1,7 +1,9 @@
-// Bản web của src/youtube/stream.ts: link MP3 của Audius / Jamendo (không hết hạn, không gắn IP).
+// Bản web của src/youtube/stream.ts: link MP3 của Audius / Jamendo (không hết hạn, không gắn IP); bài YouTube phát bằng
+// trình phát nhúng (link "youtube:<id>"), không tải về được.
 import type { ResolvedAudio } from '@/youtube/types';
 import { AUDIUS_PREFIX, streamUrl, throttle } from './audius';
 import { fetchAudioLinks, getKnownAudioLinks, JAMENDO_PREFIX } from './jamendo';
+import { YOUTUBE_PREFIX, youtubeStreamUrl } from './youtube';
 
 export type StreamErrorReason = 'age' | 'unavailable' | 'network' | 'blocked';
 
@@ -15,9 +17,14 @@ export class StreamError extends Error {
   }
 }
 
-const toResolved = (url: string, client: string): ResolvedAudio => ({ url, expiresAt: Date.now() + 24 * 3600_000, mimeType: 'audio/mpeg', client });
+const toResolved = (url: string, client: string, mimeType = 'audio/mpeg'): ResolvedAudio => ({ url, expiresAt: Date.now() + 24 * 3600_000, mimeType, client });
+const youtubeVideo = (id: string) => toResolved(youtubeStreamUrl(id), 'YOUTUBE', 'video/youtube');
+
+/** Video YouTube chỉ xem online trên bản web (YouTube không cho tải, trang web không có máy chủ để tải hộ). */
+export const canDownload = (id: string) => !id.startsWith(YOUTUBE_PREFIX);
 
 export function getCachedAudio(id: string): ResolvedAudio | undefined {
+  if (id.startsWith(YOUTUBE_PREFIX)) return youtubeVideo(id);
   if (id.startsWith(AUDIUS_PREFIX)) return toResolved(streamUrl(id), 'AUDIUS');
   const links = getKnownAudioLinks(id);
   return links ? toResolved(links.stream, 'JAMENDO') : undefined;
@@ -28,6 +35,10 @@ export function clearAudioCache() {}
 
 /** `download`: link để tải về nghe offline (nghệ sĩ Jamendo có thể chỉ cho nghe online). */
 export async function resolveAudio(id: string, options: { refresh?: boolean; download?: boolean } = {}): Promise<ResolvedAudio> {
+  if (id.startsWith(YOUTUBE_PREFIX)) {
+    if (options.download) throw new StreamError('Video YouTube chỉ xem online trên bản web, không tải về được', 'unavailable');
+    return youtubeVideo(id);
+  }
   // Audius: bài trả phí/đã gỡ không hiện trong app, bài còn lại nghe và lưu offline trong app được.
   // Link suy ra từ id nên không phải hỏi API; riêng khi tải về thì trình tải gọi /stream ngay → tính vào giới hạn gọi.
   if (id.startsWith(AUDIUS_PREFIX)) {

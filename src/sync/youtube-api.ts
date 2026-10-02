@@ -3,6 +3,7 @@
 // không cần ghép như Spotify.
 import { sleep } from '@/lib/async';
 import { cleanArtist } from '@/lib/text';
+import { apiErrorReason, bestThumbnail, isoDuration, type Thumbnails } from '@/lib/youtube-data';
 import { appFetch } from '@/youtube/http';
 import type { Track } from '@/youtube/types';
 import { getGoogleAccessToken } from './google-auth';
@@ -36,8 +37,8 @@ async function request<T>(path: string, params: Record<string, string>): Promise
       await sleep(1000 * 2 ** attempt);
       continue;
     }
-    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string; errors?: { reason?: string }[] } };
-    const reason = body.error?.errors?.[0]?.reason;
+    const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    const reason = apiErrorReason(body);
     if (reason === 'quotaExceeded') throw new YouTubeApiError(res.status, 'Hết lượt đọc YouTube hôm nay (giới hạn của Google), mai đồng bộ tiếp');
     if (reason === 'accessNotConfigured') throw new YouTubeApiError(res.status, 'Chưa bật "YouTube Data API v3" trong Google Cloud (xem hướng dẫn)');
     throw new YouTubeApiError(res.status, `YouTube: ${body.error?.message ?? `lỗi ${res.status}`}`);
@@ -62,24 +63,6 @@ async function collect<T>(path: string, params: Record<string, string>): Promise
 }
 
 // ---------- Chuyển dữ liệu ----------
-
-interface Thumbnails {
-  [size: string]: { url?: string; width?: number } | undefined;
-}
-
-function bestThumbnail(thumbnails: Thumbnails | undefined): string {
-  const list = Object.values(thumbnails ?? {}).filter((t): t is { url: string; width?: number } => Boolean(t?.url));
-  list.sort((a, b) => (b.width ?? 0) - (a.width ?? 0));
-  return list[0]?.url ?? '';
-}
-
-/** "PT1H2M5S" → 3725 giây. */
-export function isoDuration(value: string | undefined): number {
-  const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(value ?? '');
-  if (!m) return 0;
-  const [, d, h, min, s] = m.map((x) => Number(x) || 0);
-  return d * 86400 + h * 3600 + min * 60 + s;
-}
 
 export interface YouTubePlaylist {
   id: string;

@@ -43,7 +43,7 @@ export function Sheet({ open, onClose, children, tall = false, label }: Props) {
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50" role="dialog" aria-modal aria-label={label}>
+    <div className="fixed inset-x-0 top-[var(--video-h,0px)] bottom-0 z-50" role="dialog" aria-modal aria-label={label}>
       <div
         className="absolute inset-0 bg-black/60 transition-opacity"
         style={{ opacity: shown ? 1 : 0, transitionDuration: `${ANIMATION_MS}ms` }}

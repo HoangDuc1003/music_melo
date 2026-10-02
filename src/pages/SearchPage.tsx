@@ -5,6 +5,7 @@ import { Artwork } from '@/components/Artwork';
 import { Centered, ErrorState, Page, RootTitle, Spinner } from '@/components/Page';
 import { TrackRow } from '@/components/TrackRow';
 import { clearSearches, recordSearch, removeSearch, useRecentSearches } from '@/lib/library';
+import { errorMessage } from '@/lib/log';
 import { playTracks } from '@/player/controller';
 import { useDebounced } from '@/ui/hooks';
 import { navigate, openCard } from '@/ui/nav';
@@ -15,12 +16,13 @@ import type { Card, SearchType, ShelfItem } from '@/youtube/types';
 
 const TYPES: { type: SearchType; label: string }[] = [
   { type: 'song', label: 'Bài hát' },
-  // Bản web (Audius, Jamendo) không có video nhạc.
-  ...(__WEB_APP__ ? [] : [{ type: 'video' as const, label: 'Video' }]),
+  { type: 'video', label: 'Video' },
   { type: 'album', label: 'Album' },
   { type: 'artist', label: 'Nghệ sĩ' },
   { type: 'playlist', label: 'Playlist' }
 ];
+
+const SEARCH_FAILED = 'Không tìm được. Kiểm tra kết nối mạng.';
 
 function CardRow({ card }: { card: Card }) {
   return (
@@ -199,7 +201,9 @@ export function SearchPage() {
             </>
           ) : (
             <Centered>
-              {__WEB_APP__ ? 'Tìm bài hát, nghệ sĩ, album, playlist trên Audius và Jamendo.' : 'Tìm bài hát, nghệ sĩ, album hoặc dán link playlist YouTube.'}
+              {__WEB_APP__
+                ? 'Tìm bài hát, video, nghệ sĩ, playlist trên YouTube, Audius và Jamendo, hoặc dán link YouTube.'
+                : 'Tìm bài hát, nghệ sĩ, album hoặc dán link playlist YouTube.'}
             </Centered>
           )}
         </div>
@@ -208,7 +212,13 @@ export function SearchPage() {
       {showResults && (
         <>
           {results.isPending && <Spinner className="mt-10" />}
-          {results.isError && <ErrorState message="Không tìm được. Kiểm tra kết nối mạng." onRetry={() => void results.refetch()} />}
+          {results.isError && (
+            <ErrorState
+              // Bản web: lỗi của nguồn nhạc đã viết sẵn tiếng Việt (ví dụ chưa có khoá API YouTube, hết lượt tìm hôm nay).
+              message={__WEB_APP__ ? errorMessage(results.error, SEARCH_FAILED) : SEARCH_FAILED}
+              onRetry={() => void results.refetch()}
+            />
+          )}
           {results.data && <Results items={results.data} query={query} />}
         </>
       )}

@@ -23,6 +23,7 @@ import { useArtworkColor, useSlideIn } from '@/ui/hooks';
 import { navigate } from '@/ui/nav';
 import { closePlayer, openSleepTimer, openTrackMenu, runAction, setPanel, toast, toggleLikeWithToast, useOverlays } from '@/ui/overlays';
 import { TrackArtwork } from './TrackArtwork';
+import { useVideoStage } from './VideoStage';
 import { LyricsPanel } from './LyricsPanel';
 import { PlayPauseIcon } from './PlayPauseIcon';
 import { QueueSheet } from './QueueSheet';
@@ -63,6 +64,7 @@ export function FullPlayer() {
   const sleepActive = usePlayer((s) => Boolean(s.sleepTimerEndsAt || s.sleepAtEndOfItem));
   const liked = useIsLiked(entry?.track.id);
   const color = useArtworkColor(entry?.track.thumbnail, entry?.track.id);
+  const videoOpen = useVideoStage((s) => s.open);
 
   const [drag, setDrag] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -113,7 +115,7 @@ export function FullPlayer() {
 
   return (
     <div
-      className="fixed inset-0 z-40 flex flex-col overflow-hidden"
+      className="fixed inset-x-0 top-[var(--video-h,0px)] bottom-0 z-40 flex flex-col overflow-hidden"
       role="dialog"
       aria-modal
       aria-label="Trình phát"
@@ -141,6 +143,9 @@ export function FullPlayer() {
       <div className="min-h-0 flex-1 px-6">
         {panel === 'lyrics' ? (
           <LyricsPanel track={track} />
+        ) : videoOpen ? (
+          // Bản web: video YouTube đang hiện ở khung trên cùng, không cần ảnh bìa.
+          <div className="h-full touch-none" {...dragHandlers} />
         ) : (
           <div className="flex h-full touch-none items-center justify-center" {...dragHandlers}>
             <TrackArtwork

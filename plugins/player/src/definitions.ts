@@ -1,5 +1,8 @@
 import type { PluginListenerHandle } from '@capacitor/core';
 
+/** Bản web: id phần tử ứng dụng vẽ sẵn để đặt trình phát YouTube nhúng (link "youtube:<id>"). */
+export const VIDEO_SLOT_ID = 'melo-video-slot';
+
 export interface PlayerItem {
   /** videoId — dùng để khớp khi cập nhật link */
   id: string;
