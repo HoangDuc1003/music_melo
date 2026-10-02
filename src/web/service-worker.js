@@ -67,7 +67,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin === self.location.origin) {
     if (request.mode === 'navigate') return event.respondWith(navigation(request));
-    return event.respondWith(caches.match(request).then((hit) => hit ?? fetch(request)));
+    // ignoreVary: script type="module" gửi kèm header Origin, file lưu lúc cài thì không; máy chủ trả "Vary: Origin"
+    // → so khớp thường trượt và mở app khi mất mạng ra màn hình trống. File đã có mã băm trong tên nên bỏ Vary an toàn.
+    return event.respondWith(caches.match(request, { ignoreVary: true }).then((hit) => hit ?? fetch(request)));
   }
   if (request.destination === 'image') event.respondWith(image(request));
 });

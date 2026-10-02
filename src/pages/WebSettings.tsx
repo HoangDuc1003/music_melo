@@ -1,4 +1,4 @@
-// Mục "Nguồn nhạc" trong Cài đặt của bản web: Client ID Jamendo và bộ nhớ trình duyệt đang dùng.
+// Mục "Nguồn nhạc" trong Cài đặt của bản web: Audius (luôn bật), Client ID Jamendo (tuỳ chọn), bộ nhớ trình duyệt đang dùng.
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { SettingsRow } from '@/components/SettingsRow';
@@ -18,7 +18,7 @@ function ClientIdForm({ initial, onDone }: { initial: string; onDone: (id: strin
     }, 'Đã lưu Client ID Jamendo');
   return (
     <div className="mx-4 my-2 rounded-xl bg-white/5 p-4 text-[13px] leading-relaxed text-subdued">
-      <p>Jamendo là kho nhạc Creative Commons (nghe và tải miễn phí). Cần một mã Client ID miễn phí, làm một lần khoảng 2 phút:</p>
+      <p>Jamendo là kho nhạc Creative Commons (nghe và tải miễn phí), thêm vào bên cạnh Audius. Cần một mã Client ID miễn phí, làm một lần khoảng 2 phút:</p>
       <ol className="mt-2 list-decimal space-y-1 pl-5">
         <li>
           Mở{' '}
@@ -58,18 +58,16 @@ export function WebSources() {
   const [editing, setEditing] = useState(false);
   const [usage, setUsage] = useState<StorageUsage>();
   useEffect(() => {
-    void getJamendoClientId().then((id) => {
-      setClientId(id);
-      if (!id) setEditing(true);
-    });
+    void getJamendoClientId().then(setClientId);
     void storageUsage().then(setUsage);
   }, []);
 
   return (
     <>
+      <SettingsRow label="Audius" detail="Đang dùng • không cần đăng ký • bài mới mỗi ngày" />
       <SettingsRow
-        label="Jamendo"
-        detail={clientId ? `Đã có Client ID ${clientId.slice(0, 4)}…` : 'Chưa có Client ID: cần để tìm và nghe nhạc'}
+        label="Jamendo (tuỳ chọn)"
+        detail={clientId ? `Đã có Client ID ${clientId.slice(0, 4)}…` : 'Thêm kho nhạc Creative Commons: cần Client ID miễn phí'}
         onClick={() => setEditing((v) => !v)}
       />
       {editing && (

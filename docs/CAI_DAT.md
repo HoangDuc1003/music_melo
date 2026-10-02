@@ -20,7 +20,7 @@ Apple không cho cài file IPA khi chưa được ký. Với Apple ID miễn ph�
 Đã có, xem [WEB.md](WEB.md): không cần SideStore, nghe offline được. Nhưng bản web **không có YouTube Music**:
 
 * Trình duyệt chặn web gọi thẳng YouTube (CORS). Muốn gọi phải có server trung gian, mà YouTube hay chặn IP máy chủ (Vercel, AWS…) bằng lỗi "Sign in to confirm you're not a bot".
-* Vì vậy bản web lấy nhạc từ Jamendo (Creative Commons) và file nhạc của bạn. Phát khi khoá màn hình cũng kém ổn định hơn app thật.
+* Vì vậy bản web lấy nhạc từ Audius, Jamendo và file nhạc của bạn. Đây là nơi nghệ sĩ tự đăng bài, nên **không có các bài hit của hãng đĩa lớn** (V-pop, US-UK). Phát khi khoá màn hình cũng kém ổn định hơn app thật.
 
 Muốn nghe YouTube Music, phát nền chắc chắn và đồng bộ Spotify thì cài app iPhone theo một trong hai cách dưới đây.
 

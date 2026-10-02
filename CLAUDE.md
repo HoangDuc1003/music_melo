@@ -20,8 +20,10 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
 - `appId` `com.melo.music` must never change (downloads live in the app container).
 - **Web flavor (PWA, 2026-10-02, user-approved):** same React app built with `vite --mode web` for static hosting on
   Vercel (`vercel.json`, no serverless functions — still no backend). Browsers can't call YouTube (CORS), so the web
-  flavor has **no YouTube/Spotify**: music = **Jamendo** (Creative Commons API, user's own free Client ID in Settings or
-  `VITE_JAMENDO_CLIENT_ID`) + the user's **own audio files**. The iPhone app stays the full version.
+  flavor has **no YouTube/Spotify**: music = **Audius** (open API, no key, CORS, full tracks — main source since
+  2026-10-02, the user asked for newer/more songs) + **Jamendo** (optional, user's own free Client ID in Settings or
+  `VITE_JAMENDO_CLIENT_ID`) + the user's **own audio files**. Neither has major-label hits (V-pop/US-UK): those only
+  exist in the iPhone app (YouTube Music). The iPhone app stays the full version.
 - Repo `HoangDuc1003/music_melo` (renamed from `spoti_music` on 2026-10-02; old URLs redirect, GitHub Pages does
   not) is **public**: never commit secrets.
 
@@ -129,17 +131,32 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   `src/sync/mock/`) for UI work without YouTube/Spotify.
 - **Web flavor** `src/web/` (user guide `docs/WEB.md`): `--mode web` aliases `@/youtube/{music,stream,http,client}` →
   `src/web/*` and defines `__WEB_APP__` (compile-time; UI gates: Spotify section → "Nguồn nhạc", no Video search tab,
-  "Thêm nhạc từ máy" in Library, web texts). `jamendo.ts` (API v3.0, ids `jm-<id>`, links remembered per track;
-  `resolveAudio(id, { download: true })` uses `audiodownload` and refuses when `audiodownload_allowed` is false; radio =
-  seed + same-genre popular), `tags.ts` (hand-written ID3v2.2–2.4 + MP4 `ilst` reader, filename fallback),
+  "Thêm nhạc từ máy" in Library, web texts). `music.ts` merges sources: Home = Audius shelves then Jamendo shelves (only
+  with a client ID; titles must stay distinct, they are React keys), search = both in parallel, alternated (one failing
+  → the other; both → Audius error), album/artist/playlist/radio dispatch on id prefix (`au-` Audius, else Jamendo;
+  `lf-` = local file, no radio). `audius.ts` (`https://api.audius.co/v1`, `app_name=Melo`, response `{data}`; anonymous
+  limit = 5 req per sliding 1 s per IP → `throttle()` spaces calls 4 per 1.1 s, 429 → retry ×2; ids `au-<hashid>` for
+  tracks/users/playlists; gated/paid/deleted tracks filtered by `isPlayable`; Home = trending week, "Mới phát hành"
+  (trending week+month released ≤30 days, else ≤90, newest first), rising artists, trending playlists, 5 genres;
+  stream/download URL = `/tracks/<id>/stream` (302 to a freshly signed content-node URL, never expires; download adds
+  `skip_play_count=true` and takes a `throttle()` slot); radio = seed + same-genre trending, every 4th from the same
+  artist). Server source checked at github.com/AudiusProject/api (Fiber `cors.New()` = `*`, routes, rate limiter).
+  `jamendo.ts` (API v3.0, ids `jm-<id>`, links remembered per track; Home adds "Mới phát hành trên Jamendo" via
+  `datebetween` 60 days; `resolveAudio(id, { download: true })` uses `audiodownload` and refuses when
+  `audiodownload_allowed` is false; radio = seed + same-genre popular), `shelves.ts` (`settleShelves`, `alternate`,
+  `trackItems`, `cardItems`), `tags.ts` (hand-written ID3v2.2–2.4 + MP4 `ilst` reader, filename fallback),
   `local-files.ts` (ids `lf-<sha256>`, stored via `addLocalFiles` → `DownloadStorage.saveFile`, web only),
   `service-worker.js` (template; `vite.config.ts` `progressiveWebApp()` emits `/sw.js` with the precache list + hash
   version, manifest, `apple-touch-icon.png` from `docs/icon-512.png`, iOS meta tags), `pwa.ts` (SW registration,
   `navigator.storage.persist/estimate`). Web CSP drops `'unsafe-eval'` and allows `connect-src https:`. The web player
   (`plugins/player/src/web.ts`) sets Media Session (lock screen). `SAFE_ID` is now `[\w-]{3,64}`; `withRange` only
   touches googlevideo URLs. Verified with unit tests + Playwright against `vite preview` of `dist-web` with
-  `context.route` stubbing api.jamendo.com/storage (flow incl. offline reload via SW). **Not verified against real
-  Jamendo** (container egress blocks it): API CORS and whether `storage.jamendo.com` audio allows CORS downloads.
+  `context.route` stubbing api.audius.co / api.jamendo.com / storage (14 steps incl. offline reload via SW; Playwright
+  does not route the request after a fulfilled 302, so the stub serves `/stream` audio directly). **Not verified against
+  real Audius/Jamendo** (container egress blocks both): Jamendo CORS, and whether Audius content nodes answer the
+  redirected `fetch()` with CORS (mediorum uses echo `middleware.CORS()`, so it should). The SW matches precached files
+  with `ignoreVary: true` (vite preview sends `Vary: Origin`, module scripts send Origin → offline reload was blank
+  ~1/4 of the time before the fix).
   CI builds the web flavor too (`npm run build:web`).
 
 NOT verified on a real iPhone yet (no device here): background playback across tracks, lock screen, FileTransfer
@@ -197,7 +214,7 @@ TODO (next sessions):
 - `npm run dev` — Vite on :5173 with the YouTube dev proxy (`/__proxy/<host>/…`, see `vite.config.ts`);
   `MELO_LAN=1 npm run dev` to expose it on the LAN. `npm run dev:mock` — sample data, no YouTube needed.
 - `npm run build` — typecheck + build. `npm test` — vitest (jsdom + fake-indexeddb).
-- `npm run dev:web` / `npm run build:web` (→ `dist-web/`, what Vercel runs) — web flavor. Web smoke test (11 steps incl.
+- `npm run dev:web` / `npm run build:web` (→ `dist-web/`, what Vercel runs) — web flavor. Web smoke test (14 steps incl.
   offline reload): `npx vite preview --mode web --outDir dist-web --port 4175`, then `CHROMIUM_PATH=… node scripts/web-smoke.mjs`.
 - `npx cap sync ios` — copy web build + update iOS SPM package list after adding plugins.
 - `cd plugins/player && swift test` — native queue tests (macOS/Linux; CI runs them on every push).

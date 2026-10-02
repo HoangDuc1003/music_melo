@@ -1,5 +1,5 @@
 // Chạy thử Melo bản web: `npm run build:web && npx vite preview --mode web --outDir dist-web --port 4175`, rồi
-// `npm i --no-save playwright && CHROMIUM_PATH=… node scripts/web-smoke.mjs`. Jamendo được giả bằng context.route.
+// `npm i --no-save playwright && CHROMIUM_PATH=… node scripts/web-smoke.mjs`. Audius và Jamendo được giả bằng context.route.
 import { mkdirSync } from 'node:fs';
 import { chromium } from 'playwright';
 mkdirSync('web-smoke-shots', { recursive: true });
@@ -50,31 +50,76 @@ await context.route('https://api.jamendo.com/**', (route) => {
   return route.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ headers: { status: 'success', code: 0 }, results }) });
 });
 await context.route('https://prod-1.storage.jamendo.com/**', (route) => route.fulfill({ headers: cors, contentType: 'audio/wav', body: AUDIO }));
+
+// Audius: {data: …}. /stream thật chuyển hướng (302) sang máy chủ nội dung, nhưng Playwright không chặn được request
+// sau chuyển hướng (đi ra mạng thật) → ở đây /stream trả thẳng file nhạc.
+const recent = new Date(Date.now() - 2 * 24 * 3600_000).toISOString();
+const auUser = { id: 'u1', name: 'DJ Sài Gòn', handle: 'djsg', follower_count: 1200, profile_picture: null };
+const auTrack = (id, title, extra = {}) => ({ id, title, duration: 2, genre: 'Lo-Fi', release_date: recent, play_count: 10, artwork: null, user: auUser, is_streamable: true, access: { stream: true }, ...extra });
+const AU_TRACKS = [auTrack('A1', 'Phố Đêm Lo-fi'), auTrack('A2', 'Đêm Sài Gòn Mới'), auTrack('A3', 'Bài trả phí', { is_stream_gated: true, access: { stream: false } })];
+const AU_ALBUM = { id: 'P1', playlist_name: 'Đêm Sài Gòn', is_album: true, artwork: null, user: auUser, release_date: recent };
+let audiusCalls = 0;
+await context.route('https://api.audius.co/**', (route) => {
+  audiusCalls += 1;
+  const url = new URL(route.request().url());
+  const path = url.pathname.replace('/v1', '');
+  if (url.searchParams.get('app_name') !== 'Melo') return route.fulfill({ status: 400, headers: cors, body: '{}' });
+  const stream = path.match(/^\/tracks\/(\w+)\/stream$/);
+  if (stream) return route.fulfill({ headers: cors, contentType: 'audio/mpeg', body: AUDIO });
+  let data = AU_TRACKS;
+  if (path === '/playlists/trending' || path === '/playlists/search') data = [AU_ALBUM];
+  else if (path === '/playlists/P1') data = [AU_ALBUM];
+  else if (path === '/playlists/P1/tracks') data = AU_TRACKS.slice(0, 2);
+  else if (path === '/users/search' || path === '/users/u1/related') data = [auUser];
+  else if (path === '/users/u1') data = auUser;
+  else if (path.startsWith('/tracks/') && !['/tracks/trending', '/tracks/search'].includes(path)) data = AU_TRACKS.find((t) => path === `/tracks/${t.id}`);
+  return route.fulfill({ headers: cors, contentType: 'application/json', body: JSON.stringify({ data }) });
+});
 await context.route('https://lrclib.net/**', (route) => route.fulfill({ status: 404, headers: cors, body: '{}' }));
 
-await page.goto(BASE);
-await v(page.getByText(/Chưa có Client ID Jamendo/)).waitFor({ timeout: 10000 });
-await shot('1-chua-co-client-id');
-ok('chưa có Client ID: trang chủ hướng dẫn vào Cài đặt');
+const playing = () => page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === 'Tạm dừng'), null, { timeout: 10000 });
+const downloadedVisible = (n) =>
+  page.waitForFunction((min) => [...document.querySelectorAll('[aria-label="Đã tải"]')].filter((e) => e.checkVisibility()).length >= min, n, { timeout: 15000 });
 
-await v(page.getByRole('button', { name: 'Mở Cài đặt' })).click();
+await page.goto(BASE);
+await v(page.getByText('Thịnh hành tuần này')).waitFor({ timeout: 10000 });
+await v(page.getByText('Mới phát hành', { exact: true })).waitFor();
+await v(page.getByText('Nhạc từ')).waitFor();
+if (await page.getByText('Bài trả phí').filter({ visible: true }).count()) throw new Error('bài trả phí của Audius không được hiện');
+if (await page.getByText(/Client ID/).filter({ visible: true }).count()) throw new Error('trang chủ không được đòi Client ID');
+await shot('1-trang-chu-audius');
+ok('mở lần đầu: trang chủ có nhạc Audius ngay (không cần Client ID), có hàng Mới phát hành, bỏ bài trả phí');
+
+await v(page.getByText('Phố Đêm Lo-fi')).click();
+await playing();
+ok('phát bài từ Audius (đang phát)');
+
+await v(page.getByText('Đêm Sài Gòn', { exact: true })).click();
+await v(page.getByLabel('Tải tất cả')).click();
+await downloadedVisible(2);
+await shot('2-album-audius-da-tai');
+ok('tải cả album Audius về máy');
+
+await v(page.getByRole('button', { name: 'Trang chủ', exact: true })).click();
+await wait(300);
+await v(page.getByRole('button', { name: 'Cài đặt' })).click();
+await v(page.getByText('Jamendo (tuỳ chọn)')).click();
 await v(page.getByLabel('Client ID Jamendo')).fill('abcd1234');
 await v(page.getByRole('button', { name: 'Lưu', exact: true })).click();
 await v(page.getByText(/Đã có Client ID/)).waitFor();
 if (await page.getByText('Spotify').filter({ visible: true }).count()) throw new Error('bản web không được có mục Spotify');
-await shot('2-cai-dat');
-ok('nhập Client ID trong Cài đặt; không có mục Spotify');
+await shot('3-cai-dat');
+ok('Cài đặt: Audius luôn bật; nhập Client ID Jamendo (tuỳ chọn); không có mục Spotify');
 
 await v(page.getByRole('button', { name: 'Trang chủ', exact: true })).click();
 await wait(300);
 await v(page.getByRole('button', { name: 'Trang chủ', exact: true })).click();
-await v(page.getByText('Thịnh hành tuần này')).waitFor({ timeout: 10000 });
-await v(page.getByText('Nhạc Creative Commons từ')).waitFor();
-await shot('3-trang-chu');
-ok('trang chủ có các hàng nhạc Jamendo + ghi công');
+await v(page.getByText('Thịnh hành trên Jamendo')).waitFor({ timeout: 10000 });
+await shot('4-trang-chu-hai-nguon');
+ok('trang chủ có thêm các hàng Jamendo');
 
 await v(page.getByText('Gió Chiều')).click();
-await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === 'Tạm dừng'), null, { timeout: 10000 });
+await playing();
 ok('phát bài từ Jamendo (đang phát)');
 
 // Tìm kiếm: không có tab Video
@@ -82,16 +127,17 @@ await v(page.getByRole('button', { name: 'Tìm kiếm', exact: true })).click();
 await v(page.getByPlaceholder(/Bạn muốn nghe gì/)).fill('gió');
 await page.keyboard.press('Enter');
 await v(page.getByText('Mưa Đêm Lounge')).waitFor();
+await v(page.getByText('Đêm Sài Gòn Mới')).waitFor();
 if (await page.getByRole('button', { name: 'Video', exact: true }).filter({ visible: true }).count()) throw new Error('không được có tab Video');
-ok('tìm kiếm bài hát, không có tab Video');
+ok('tìm kiếm: kết quả của cả Audius và Jamendo, không có tab Video');
 
 // Tải album
 await v(page.getByRole('button', { name: 'Album', exact: true })).click();
 await v(page.getByText('Chiều Lounge')).click();
 await v(page.getByLabel('Tải tất cả')).click();
-await page.waitForFunction(() => document.querySelectorAll('[aria-label="Đã tải"]').length >= 2, null, { timeout: 15000 });
-await shot('4-album-da-tai');
-ok('tải cả album về máy (blob trong IndexedDB)');
+await downloadedVisible(2);
+await shot('5-album-jamendo-da-tai');
+ok('tải cả album Jamendo về máy (blob trong IndexedDB)');
 
 // Thêm file nhạc từ máy
 await v(page.getByRole('button', { name: 'Thư viện', exact: true })).click();
@@ -108,8 +154,9 @@ ok('thêm file nhạc từ máy (bỏ qua file không phải nhạc)');
 
 await v(page.getByText('Đã tải', { exact: true })).click();
 await v(page.getByText('Bài Của Tôi')).waitFor();
-await shot('5-da-tai');
-ok('Đã tải có 2 bài Jamendo + 1 file tự thêm');
+await v(page.getByText('Phố Đêm Lo-fi')).waitFor();
+await shot('6-da-tai');
+ok('Đã tải có 2 bài Audius + 2 bài Jamendo + 1 file tự thêm');
 
 // Offline: tải lại trang khi mất mạng → service worker mở app, nhạc đã tải vẫn phát
 const swReady = await page.evaluate(async () => Boolean((await navigator.serviceWorker.ready).active));
@@ -121,15 +168,20 @@ ok('mất mạng: mở lại app được (service worker)');
 await v(page.getByRole('button', { name: 'Thư viện', exact: true })).click();
 await v(page.getByText('Đã tải', { exact: true })).click();
 await v(page.getByText('Bài Của Tôi')).click();
-await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === 'Tạm dừng'), null, { timeout: 10000 });
-await shot('6-offline-dang-phat');
+await playing();
+await shot('7-offline-dang-phat');
 ok('mất mạng: phát file đã thêm');
 await v(page.getByText('Gió Chiều')).click();
 await page.waitForFunction(() => document.body.innerText.includes('Gió Chiều'), null, { timeout: 5000 });
 ok('mất mạng: phát bài Jamendo đã tải');
+await v(page.getByText('Phố Đêm Lo-fi')).click();
+await playing();
+await wait(800);
+if (await page.getByText(/không phát được|Không phát được/).filter({ visible: true }).count()) throw new Error('bài Audius đã tải không phát được khi mất mạng');
+ok('mất mạng: phát bài Audius đã tải');
 
 await context.setOffline(false);
-console.log(`   Jamendo được gọi ${jamendoCalls} lần`);
+console.log(`   Audius được gọi ${audiusCalls} lần, Jamendo ${jamendoCalls} lần`);
 if (errors.length) {
   console.log(errors.join('\n'));
   process.exit(1);

@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/lib/db';
-import { __clearJamendoCacheForTests, getAlbum, getHome, getRadio, setJamendoClientId, toTrack } from './jamendo';
+import { __clearJamendoCacheForTests, getAlbum, getHome, getRadio, searchCards, searchTracks, setJamendoClientId, toTrack } from './jamendo';
 import { getCachedAudio, resolveAudio } from './stream';
-import { getUpNext, search } from './music';
+import { getUpNext } from './music';
 
 const raw = (id: number, extra: object = {}) => ({
   id: String(id),
@@ -66,9 +66,11 @@ describe('Jamendo', () => {
       if (url.searchParams.get('tags') === 'rock') return ok([]);
       return url.pathname.endsWith('/artists/') ? ok([{ id: '7', name: 'Ca sĩ CC', image: 'https://img/a' }]) : ok([raw(1), raw(2)]);
     });
-    const shelves = await getHome();
-    expect(shelves.map((s) => s.title)).toEqual(['Thịnh hành tuần này', 'Nghệ sĩ được nghe nhiều', 'Pop', 'Acoustic thư giãn', 'Lounge & chill', 'Điện tử', 'Piano']);
+    const shelves = await getHome(Date.parse('2026-10-02T12:00:00Z'));
+    expect(shelves.map((s) => s.title)).toEqual(['Thịnh hành trên Jamendo', 'Mới phát hành trên Jamendo', 'Nghệ sĩ Jamendo được nghe nhiều', 'Acoustic thư giãn', 'Lounge & chill', 'Piano']);
     expect(calls().every((u) => u.searchParams.get('client_id') === 'abcd1234' && u.searchParams.get('format') === 'json')).toBe(true);
+    // Mới phát hành: bài ra trong 60 ngày qua.
+    expect(calls().find((u) => u.searchParams.has('datebetween'))?.searchParams.get('datebetween')).toBe('2026-08-03_2026-10-02');
   });
 
   it('album: bài lấy tên/ảnh album và nghệ sĩ từ phần đầu album', async () => {
@@ -80,12 +82,12 @@ describe('Jamendo', () => {
     expect(album.tracks[0]).toMatchObject({ id: 'jm-5', artists: [{ id: '7', name: 'Ca sĩ CC' }], album: { id: '9', name: 'Album CC' }, thumbnail: 'https://img/9' });
   });
 
-  it('tìm kiếm: bài, album, nghệ sĩ, playlist; không có video', async () => {
+  it('tìm kiếm: bài, album, nghệ sĩ, playlist', async () => {
     fetchMock.mockResolvedValue(ok([raw(3)]));
-    expect((await search('chill', 'song'))[0]).toMatchObject({ type: 'track', track: { id: 'jm-3' } });
-    expect(await search('chill', 'video')).toEqual([]);
+    expect((await searchTracks('chill'))[0]).toMatchObject({ id: 'jm-3' });
+    expect(calls().at(-1)?.searchParams.get('search')).toBe('chill');
     fetchMock.mockResolvedValue(ok([{ id: '9', name: 'Album CC', artist_name: 'Ca sĩ CC', image: 'https://img/9' }]));
-    expect((await search('chill', 'album'))[0]).toEqual({ type: 'card', card: { kind: 'album', id: '9', title: 'Album CC', subtitle: 'Ca sĩ CC', thumbnail: 'https://img/9' } });
+    expect((await searchCards('album', 'chill'))[0]).toEqual({ kind: 'album', id: '9', title: 'Album CC', subtitle: 'Ca sĩ CC', thumbnail: 'https://img/9' });
     expect(calls().at(-1)?.searchParams.get('namesearch')).toBe('chill');
   });
 

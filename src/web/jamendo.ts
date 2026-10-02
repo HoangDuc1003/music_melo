@@ -1,8 +1,8 @@
-// Jamendo: kho nhạc Creative Commons có API cho app bên thứ ba. Bản web của Melo dùng nguồn này
-// (trình duyệt không gọi thẳng YouTube được, và Melo không có server trung gian).
-// Tài liệu API: https://developer.jamendo.com/v3.0
+// Jamendo: kho nhạc Creative Commons có API cho app bên thứ ba. Nguồn thứ hai (tuỳ chọn) của bản web, bên cạnh Audius:
+// cần Client ID miễn phí của người dùng. Tài liệu API: https://developer.jamendo.com/v3.0
 import { getSetting, setSetting } from '@/lib/db';
-import type { AlbumPage, ArtistPage, Card, PlaylistPage, Shelf, ShelfItem, Track } from '@/youtube/types';
+import type { AlbumPage, ArtistPage, Card, PlaylistPage, Shelf, Track } from '@/youtube/types';
+import { cardItems, settleShelves, trackItems } from './shelves';
 
 const API = 'https://api.jamendo.com/v3.0';
 const CLIENT_ID_SETTING = 'jamendoClientId';
@@ -143,8 +143,7 @@ const playlistCard = (p: RawPlaylist): Card => ({
   subtitle: p.user_name ? `Playlist • ${p.user_name}` : 'Playlist',
   thumbnail: p.tracks?.[0]?.image ?? ''
 });
-const trackItems = (raws: RawTrack[]): ShelfItem[] => raws.map((r) => ({ type: 'track', track: toTrack(r) }));
-const cardItems = (cards: Card[]): ShelfItem[] => cards.map((card) => ({ type: 'card', card }));
+const tracksOf = (raws: RawTrack[]): Track[] => raws.map((r) => toTrack(r));
 
 /** Tham số chung cho danh sách bài: ảnh vừa đủ, MP3 chất lượng cao. */
 const TRACK_PARAMS = { imagesize: IMAGE_SIZE, audioformat: 'mp32', audiodlformat: 'mp32' };
@@ -152,31 +151,28 @@ const rawId = (id: string) => id.replace(JAMENDO_PREFIX, '');
 
 // ---------- Các trang ----------
 
+// Tên hàng khác với hàng của Audius (hai nguồn hiện chung một trang chủ).
 const GENRES: [tag: string, title: string][] = [
-  ['pop', 'Pop'],
   ['acoustic', 'Acoustic thư giãn'],
   ['lounge', 'Lounge & chill'],
-  ['electronic', 'Điện tử'],
   ['piano', 'Piano'],
   ['rock', 'Rock']
 ];
 
-export async function getHome(): Promise<Shelf[]> {
-  const shelves: Promise<Shelf>[] = [
-    call<RawTrack>('/tracks/', { ...TRACK_PARAMS, order: 'popularity_week', limit: 20 }).then((r) => ({ title: 'Thịnh hành tuần này', items: trackItems(r) })),
-    call<RawAlbum>('/albums/', { imagesize: IMAGE_SIZE, order: 'popularity_month', limit: 12 }).then((r) => ({ title: 'Album nổi bật', items: cardItems(r.map(albumCard)) })),
-    call<RawArtist>('/artists/', { imagesize: IMAGE_SIZE, order: 'popularity_month', limit: 12 }).then((r) => ({ title: 'Nghệ sĩ được nghe nhiều', items: cardItems(r.map(artistCard)) })),
+const isoDate = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+export async function getHome(now = Date.now()): Promise<Shelf[]> {
+  // Bài phát hành trong 60 ngày qua, được nghe nhiều nhất tháng.
+  const recent = `${isoDate(now - 60 * 24 * 3600_000)}_${isoDate(now)}`;
+  return settleShelves([
+    call<RawTrack>('/tracks/', { ...TRACK_PARAMS, order: 'popularity_week', limit: 20 }).then((r) => ({ title: 'Thịnh hành trên Jamendo', items: trackItems(tracksOf(r)) })),
+    call<RawTrack>('/tracks/', { ...TRACK_PARAMS, datebetween: recent, order: 'popularity_month', limit: 20 }).then((r) => ({ title: 'Mới phát hành trên Jamendo', items: trackItems(tracksOf(r)) })),
+    call<RawAlbum>('/albums/', { imagesize: IMAGE_SIZE, order: 'popularity_month', limit: 12 }).then((r) => ({ title: 'Album nổi bật trên Jamendo', items: cardItems(r.map(albumCard)) })),
+    call<RawArtist>('/artists/', { imagesize: IMAGE_SIZE, order: 'popularity_month', limit: 12 }).then((r) => ({ title: 'Nghệ sĩ Jamendo được nghe nhiều', items: cardItems(r.map(artistCard)) })),
     ...GENRES.map(([tag, title]) =>
-      call<RawTrack>('/tracks/', { ...TRACK_PARAMS, tags: tag, order: 'popularity_month', limit: 12 }).then((r) => ({ title, items: trackItems(r) }))
+      call<RawTrack>('/tracks/', { ...TRACK_PARAMS, tags: tag, order: 'popularity_month', limit: 12 }).then((r) => ({ title, items: trackItems(tracksOf(r)) }))
     )
-  ];
-  const settled = await Promise.allSettled(shelves);
-  const ok = settled.flatMap((s) => (s.status === 'fulfilled' && s.value.items.length ? [s.value] : []));
-  if (!ok.length) {
-    const failed = settled.find((s): s is PromiseRejectedResult => s.status === 'rejected');
-    if (failed) throw failed.reason;
-  }
-  return ok;
+  ]);
 }
 
 export async function searchTracks(query: string, limit = 30): Promise<Track[]> {

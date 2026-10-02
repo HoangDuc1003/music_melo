@@ -147,7 +147,7 @@ export interface Signals {
   now: Date;
 }
 
-/** Radio từ một bài (YouTube Music; bản web: Jamendo). Lỗi mạng thì trả về mảng rỗng. */
+/** Radio từ một bài (YouTube Music; bản web: Audius / Jamendo). Lỗi mạng thì trả về mảng rỗng. */
 export type Radio = (seed: Track) => Promise<Track[]>;
 
 /**

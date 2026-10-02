@@ -120,7 +120,7 @@ export function SettingsPage() {
         <SettingsRow label="Phiên bản" detail={`Melo ${__APP_VERSION__}`} />
         <p className="px-4 pt-2 text-[12px] leading-relaxed text-subdued">
           {__WEB_APP__
-            ? 'Bản web của Melo: nhạc Creative Commons từ Jamendo (giấy phép của từng nghệ sĩ) và file nhạc của bạn. Nhạc đã tải nằm trong trình duyệt trên máy này, không qua máy chủ nào.'
+            ? 'Bản web của Melo: nhạc từ Audius và Jamendo (giấy phép của từng nghệ sĩ) và file nhạc của bạn. Nhạc đã tải nằm trong trình duyệt trên máy này, không qua máy chủ nào.'
             : 'App dùng cá nhân, không phát hành trên App Store. Nhạc lấy từ YouTube Music ngay trên máy, không qua máy chủ nào.'}
         </p>
       </Section>

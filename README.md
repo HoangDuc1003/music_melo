@@ -58,9 +58,10 @@
 ### Bản web 🌐
 
 - **Không cần SideStore:** mở link bằng Safari → *Thêm vào MH chính*. Đưa lên Vercel một lần, mỗi lần đẩy code thì tự cập nhật.
-- Nhạc từ **Jamendo** (kho nhạc Creative Commons) và **file nhạc của bạn** (MP3/M4A trong app Tệp, iCloud Drive; tự đọc tên bài và ảnh bìa trong file).
+- Nhạc từ **Audius** (nghệ sĩ tự đăng, bài mới mỗi ngày, không cần đăng ký), **Jamendo** (kho Creative Commons, tuỳ chọn) và **file nhạc của bạn** (MP3/M4A trong app Tệp, iCloud Drive; tự đọc tên bài và ảnh bìa trong file).
+- Trang chủ có **Thịnh hành tuần này**, **Mới phát hành**, nghệ sĩ đang nổi, playlist và các thể loại.
 - **Mở app và nghe nhạc đã tải khi không có mạng.** Màn hình khoá hiện tên bài và nút chuyển bài.
-- Không có YouTube Music: trình duyệt không gọi thẳng YouTube được, và Melo không dùng server. Hướng dẫn: [docs/WEB.md](docs/WEB.md).
+- Không có YouTube Music (nên không có các bài hit của hãng đĩa lớn): trình duyệt không gọi thẳng YouTube được, và Melo không dùng server. Hướng dẫn: [docs/WEB.md](docs/WEB.md).
 
 ### Thư viện 📚
 

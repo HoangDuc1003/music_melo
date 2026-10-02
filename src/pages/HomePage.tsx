@@ -28,7 +28,7 @@ function ShelfSkeleton() {
   );
 }
 
-/** Bản web: lỗi của Jamendo đã viết sẵn tiếng Việt (ví dụ chưa nhập Client ID) → hiện nguyên văn + nút mở Cài đặt. */
+/** Bản web: lỗi của nguồn nhạc đã viết sẵn tiếng Việt → hiện nguyên văn + nút mở Cài đặt (Nguồn nhạc). */
 function HomeError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
   const fallback = 'Không tải được trang chủ. Kiểm tra kết nối mạng.';
   if (!__WEB_APP__) return <ErrorState message={fallback} onRetry={onRetry} />;
@@ -104,10 +104,15 @@ export function HomePage() {
       {home.data?.map((shelf) => <Shelf key={shelf.title} shelf={shelf} />)}
       {__WEB_APP__ && home.data && (
         <p className="px-4 pt-8 text-center text-[12px] text-subdued">
-          Nhạc Creative Commons từ{' '}
+          Nhạc từ{' '}
+          <a className="underline" href="https://audius.co" target="_blank" rel="noopener noreferrer">
+            Audius
+          </a>{' '}
+          và{' '}
           <a className="underline" href="https://www.jamendo.com" target="_blank" rel="noopener noreferrer">
             Jamendo
-          </a>
+          </a>{' '}
+          (giấy phép của từng nghệ sĩ)
         </p>
       )}
     </Page>
