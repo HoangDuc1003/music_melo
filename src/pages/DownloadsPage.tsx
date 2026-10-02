@@ -3,6 +3,7 @@ import { RotateCw, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { CollectionView } from '@/components/CollectionView';
 import { Centered } from '@/components/Page';
+import { PendingVideos } from '@/components/PendingVideos';
 import { ProgressBar } from '@/components/ProgressBar';
 import { progressRatio, removeAllDownloads, removeDownload, retryDownload, totalDownloadedBytes, useDownloads } from '@/downloads/manager';
 import { getTracks, type DownloadRow } from '@/lib/db';
@@ -65,6 +66,7 @@ export function DownloadsPage() {
         !pending.length && <Centered>Chưa có bài nào. Bấm ⬇ ở album/playlist hoặc “Tải về” trong menu ⋮ của bài hát.</Centered>
       }
     >
+      {__WEB_APP__ && <PendingVideos />}
       {pending.length > 0 && (
         <section className="pb-4">
           <h2 className="px-4 pt-2 text-[17px] font-bold">Đang tải ({pending.length})</h2>

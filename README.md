@@ -61,7 +61,7 @@
 - Nhạc từ **YouTube** (tuỳ chọn, cần khoá API miễn phí: tìm mọi bài hát, MV, xem online trong khung video), **Audius** (nghệ sĩ tự đăng, bài mới mỗi ngày, không cần đăng ký), **Jamendo** (kho Creative Commons, tuỳ chọn) và **file nhạc của bạn** (MP3/M4A trong app Tệp, iCloud Drive; tự đọc tên bài và ảnh bìa trong file).
 - Trang chủ có **Nhạc thịnh hành trên YouTube**, **Thịnh hành tuần này**, **Mới phát hành**, nghệ sĩ đang nổi, playlist và các thể loại.
 - **Mở app và nghe nhạc đã tải khi không có mạng.** Màn hình khoá hiện tên bài và nút chuyển bài.
-- Video YouTube **chỉ xem online** (không tải về, khoá màn hình thì dừng): trang web không lấy được file nhạc của YouTube vì Melo không dùng server. Muốn tải bài hit về nghe offline thì dùng app iPhone. Hướng dẫn: [docs/WEB.md](docs/WEB.md).
+- Video YouTube xem online trong khung video (khoá màn hình thì dừng). Muốn nghe offline: menu ⋮ → **Tải MP3 qua trang chuyển đổi** (trang yt2… bạn hay dùng), tải về app Tệp rồi chọn file, Melo tự gắn file vào đúng bài. Hướng dẫn: [docs/WEB.md](docs/WEB.md).
 
 ### Thư viện 📚
 

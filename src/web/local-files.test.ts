@@ -47,7 +47,7 @@ describe('thêm nhạc từ máy', () => {
       new File([new Uint8Array(100)], 'Đen Vâu - Bài Này Chill Phết.m4a', { type: 'audio/mp4', lastModified: 2 }),
       new File(['không phải nhạc'], 'ghi-chu.txt', { type: 'text/plain' })
     ];
-    expect(await importAudioFiles(files, { duration })).toEqual({ added: 2, skipped: 1 });
+    expect(await importAudioFiles(files, { duration })).toEqual({ added: 2, attached: 0, skipped: 1 });
 
     const tracks = await db.tracks.toArray();
     expect(tracks.map((t) => [t.title, t.artists[0]?.name, t.duration]).sort()).toEqual([
@@ -63,7 +63,7 @@ describe('thêm nhạc từ máy', () => {
     expect(useDownloads.getState().artwork.has(tagged.id)).toBe(true);
     expect(await localFileUrl(tagged.id)).toMatch(/^blob:/);
 
-    expect(await importAudioFiles(files, { duration })).toEqual({ added: 0, skipped: 3 });
+    expect(await importAudioFiles(files, { duration })).toEqual({ added: 0, attached: 0, skipped: 3 });
     expect(await db.downloads.count()).toBe(2);
   });
 });

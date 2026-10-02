@@ -20,7 +20,10 @@ export class StreamError extends Error {
 const toResolved = (url: string, client: string, mimeType = 'audio/mpeg'): ResolvedAudio => ({ url, expiresAt: Date.now() + 24 * 3600_000, mimeType, client });
 const youtubeVideo = (id: string) => toResolved(youtubeStreamUrl(id), 'YOUTUBE', 'video/youtube');
 
-/** Video YouTube chỉ xem online trên bản web (YouTube không cho tải, trang web không có máy chủ để tải hộ). */
+/**
+ * Bản web không tự tải video YouTube (YouTube không cho, trang web không có máy chủ để tải hộ): người dùng tải MP3 qua
+ * trang chuyển đổi rồi chọn file (web/youtube-files.ts).
+ */
 export const canDownload = (id: string) => !id.startsWith(YOUTUBE_PREFIX);
 
 export function getCachedAudio(id: string): ResolvedAudio | undefined {
@@ -36,7 +39,7 @@ export function clearAudioCache() {}
 /** `download`: link để tải về nghe offline (nghệ sĩ Jamendo có thể chỉ cho nghe online). */
 export async function resolveAudio(id: string, options: { refresh?: boolean; download?: boolean } = {}): Promise<ResolvedAudio> {
   if (id.startsWith(YOUTUBE_PREFIX)) {
-    if (options.download) throw new StreamError('Video YouTube chỉ xem online trên bản web, không tải về được', 'unavailable');
+    if (options.download) throw new StreamError('Video YouTube trên bản web: tải MP3 qua trang chuyển đổi (menu ⋮ → Tải MP3) rồi chọn file', 'unavailable');
     return youtubeVideo(id);
   }
   // Audius: bài trả phí/đã gỡ không hiện trong app, bài còn lại nghe và lưu offline trong app được.

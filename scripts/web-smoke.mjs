@@ -7,6 +7,7 @@ mkdirSync('web-smoke-shots', { recursive: true });
 const BASE = 'http://localhost:4175/';
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, args: ['--autoplay-policy=no-user-gesture-required'] });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: 'http://localhost:4175' });
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
@@ -110,6 +111,8 @@ const FAKE_IFRAME_API = `window.YT = { Player: class {
 window.onYouTubeIframeAPIReady && window.onYouTubeIframeAPIReady();`;
 await context.route('https://www.youtube.com/iframe_api', (route) => route.fulfill({ contentType: 'text/javascript', body: FAKE_IFRAME_API }));
 await context.route('https://www.youtube.com/embed/**', (route) => route.fulfill({ contentType: 'text/html', body: '<body style="margin:0;background:#400;color:#fff">YouTube giả</body>' }));
+// Trang chuyển đổi (yt2…) giả.
+await context.route('https://yt2.example.com/**', (route) => route.fulfill({ contentType: 'text/html', body: '<p>Trang chuyển đổi giả</p>' }));
 await context.route('https://lrclib.net/**', (route) => route.fulfill({ status: 404, headers: cors, body: '{}' }));
 
 const playing = () => page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => b.getAttribute('aria-label') === 'Tạm dừng'), null, { timeout: 10000 });
@@ -147,8 +150,12 @@ await v(page.getByText('YouTube (tuỳ chọn)')).click();
 await v(page.getByLabel('Khoá API YouTube')).fill(YT_KEY);
 await v(page.getByRole('button', { name: 'Lưu', exact: true })).click();
 await v(page.getByText(/Đã có khoá API/)).waitFor();
+await v(page.getByText('Trang tải MP3 từ YouTube')).click();
+await v(page.getByLabel('Trang tải MP3 từ YouTube')).fill('https://yt2.example.com/?url={url}');
+await v(page.getByRole('button', { name: 'Lưu', exact: true })).click();
+await v(page.getByText(/yt2\.example\.com • menu/)).waitFor();
 await shot('3-cai-dat');
-ok('Cài đặt: Audius luôn bật; nhập Client ID Jamendo và khoá API YouTube (tuỳ chọn); không có mục Spotify');
+ok('Cài đặt: Audius luôn bật; nhập Client ID Jamendo, khoá API YouTube, trang tải MP3 (tuỳ chọn); không có mục Spotify');
 
 await v(page.getByRole('button', { name: 'Trang chủ', exact: true })).click();
 await wait(300);
@@ -205,8 +212,24 @@ await v(page.getByText('Đêm Sài Gòn Mới')).waitFor();
 await v(page.getByText('Lạc Trôi | Official MV')).waitFor();
 await v(page.getByRole('button', { name: 'Video', exact: true })).click();
 await v(page.getByText('Hậu trường quay MV')).waitFor();
-await v(page.getByRole('button', { name: 'Bài hát', exact: true })).click();
 ok('tìm kiếm: kết quả của YouTube, Audius và Jamendo; tab Video có video YouTube');
+
+// Tải MP3 qua trang chuyển đổi: mở trang kèm link video, copy sẵn link, bài vào danh sách chờ file.
+async function downloadViaConverter(title, videoId) {
+  const popup = context.waitForEvent('page');
+  await v(page.getByLabel(`Tuỳ chọn cho ${title}`)).click();
+  if (await page.getByText('Tải về', { exact: true }).filter({ visible: true }).count()) throw new Error('video YouTube không được có "Tải về" thường');
+  await v(page.getByText('Tải MP3 qua trang chuyển đổi')).click();
+  const opened = await popup;
+  const expected = `https://yt2.example.com/?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}`;
+  if (opened.url() !== expected) throw new Error(`mở sai trang: ${opened.url()}`);
+  await opened.close();
+  await page.waitForFunction((id) => navigator.clipboard.readText().then((t) => t.includes(id)), videoId, { timeout: 5000 });
+}
+await downloadViaConverter('Hậu trường quay MV', 'ccccccccccc');
+await v(page.getByRole('button', { name: 'Bài hát', exact: true })).click();
+await downloadViaConverter('Lạc Trôi | Official MV', 'aaaaaaaaaaa');
+ok('menu ⋮ của video: mở trang chuyển đổi kèm link video (yt2), copy sẵn link, không có "Tải về" thường');
 
 // Tải album
 await v(page.getByRole('button', { name: 'Album', exact: true })).click();
@@ -216,24 +239,41 @@ await downloadedVisible(2);
 await shot('5-album-jamendo-da-tai');
 ok('tải cả album Jamendo về máy (blob trong IndexedDB)');
 
-// Thêm file nhạc từ máy
+// Đã tải → Chờ file: chọn file MP3 vừa tải cho đúng bài
+await v(page.getByRole('button', { name: 'Thư viện', exact: true })).click();
+await wait(300);
+await v(page.getByRole('button', { name: 'Thư viện', exact: true })).click();
+await v(page.getByText('Đã tải', { exact: true })).click();
+await v(page.getByText(/Chờ file từ trang chuyển đổi \(2\)/)).waitFor();
+await shot('6-cho-file');
+const fileForVideo = page.waitForEvent('filechooser');
+await v(page.locator('section', { hasText: 'Chờ file từ trang chuyển đổi' }).locator('div', { hasText: 'Hậu trường quay MV' }).getByRole('button', { name: 'Chọn file' })).click();
+await (await fileForVideo).setFiles([{ name: 'tai-ve.mp3', mimeType: 'audio/mpeg', buffer: wav(2) }]);
+await v(page.locator('.toast-in', { hasText: 'Đã lưu file: bài này nghe offline được' })).waitFor({ timeout: 10000 });
+await v(page.getByText(/Chờ file từ trang chuyển đổi \(1\)/)).waitFor();
+ok('Đã tải → Chờ file → Chọn file: file MP3 gắn vào đúng video');
+
+// Thêm nhạc từ máy: file của trang chuyển đổi tự gắn vào video đang chờ; file khác thành bài mới
 await v(page.getByRole('button', { name: 'Thư viện', exact: true })).click();
 await wait(300);
 await v(page.getByRole('button', { name: 'Thư viện', exact: true })).click();
 const chooser = page.waitForEvent('filechooser');
 await v(page.getByText('Thêm nhạc từ máy')).click();
 await (await chooser).setFiles([
+  { name: 'y2mate.com - Lac Troi  Official MV_128kbps.mp3', mimeType: 'audio/mpeg', buffer: wav(2) },
   { name: 'Hà Anh - Bài Của Tôi.wav', mimeType: 'audio/wav', buffer: wav(1) },
   { name: 'ghi-chu.txt', mimeType: 'text/plain', buffer: Buffer.from('x') }
 ]);
-await v(page.locator('.toast-in', { hasText: 'Đã thêm 1 bài vào Đã tải' })).waitFor({ timeout: 10000 });
-ok('thêm file nhạc từ máy (bỏ qua file không phải nhạc)');
+await v(page.locator('.toast-in', { hasText: 'Đã thêm 1 bài, gắn 1 file vào bài YouTube đang chờ • bỏ qua 1 file' })).waitFor({ timeout: 10000 });
+ok('thêm file nhạc từ máy: tự gắn file y2mate vào video đang chờ, bỏ qua file không phải nhạc');
 
 await v(page.getByText('Đã tải', { exact: true })).click();
 await v(page.getByText('Bài Của Tôi')).waitFor();
 await v(page.getByText('Phố Đêm Lo-fi')).waitFor();
-await shot('6-da-tai');
-ok('Đã tải có 2 bài Audius + 2 bài Jamendo + 1 file tự thêm');
+await v(page.getByText('Lạc Trôi | Official MV')).waitFor();
+if (await page.getByText(/Chờ file từ trang chuyển đổi/).filter({ visible: true }).count()) throw new Error('không còn bài nào chờ file');
+await shot('7-da-tai');
+ok('Đã tải có 2 bài Audius + 2 bài Jamendo + 2 video YouTube (MP3) + 1 file tự thêm');
 
 // Offline: tải lại trang khi mất mạng → service worker mở app, nhạc đã tải vẫn phát
 const swReady = await page.evaluate(async () => Boolean((await navigator.serviceWorker.ready).active));
@@ -246,7 +286,7 @@ await v(page.getByRole('button', { name: 'Thư viện', exact: true })).click();
 await v(page.getByText('Đã tải', { exact: true })).click();
 await v(page.getByText('Bài Của Tôi')).click();
 await playing();
-await shot('7-offline-dang-phat');
+await shot('8-offline-dang-phat');
 ok('mất mạng: phát file đã thêm');
 await v(page.getByText('Gió Chiều')).click();
 await page.waitForFunction(() => document.body.innerText.includes('Gió Chiều'), null, { timeout: 5000 });
@@ -256,6 +296,11 @@ await playing();
 await wait(800);
 if (await page.getByText(/không phát được|Không phát được/).filter({ visible: true }).count()) throw new Error('bài Audius đã tải không phát được khi mất mạng');
 ok('mất mạng: phát bài Audius đã tải');
+await v(page.getByText('Lạc Trôi | Official MV')).click();
+await playing();
+await wait(500);
+if ((await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--video-h').trim())) !== '0px') throw new Error('bài YouTube đã có file không được mở khung video');
+ok('mất mạng: phát video YouTube đã tải MP3 (thẻ <audio>, không cần khung video)');
 
 await context.setOffline(false);
 console.log(`   YouTube được gọi ${youtubeCalls} lần, Audius ${audiusCalls} lần, Jamendo ${jamendoCalls} lần`);

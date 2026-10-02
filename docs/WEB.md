@@ -8,7 +8,7 @@ Bản web không cần SideStore và không cần máy tính. Bạn mở link b�
 |---|---|---|
 | Cài đặt | SideStore, gia hạn 7 ngày | Mở link → Thêm vào MH chính |
 | Nguồn nhạc | YouTube Music (đủ bài hit mới nhất) | **YouTube** (tuỳ chọn, cần khoá API miễn phí) + **Audius** (không cần đăng ký) + **Jamendo** (tuỳ chọn) + **file nhạc của bạn** |
-| Tải về nghe offline | ✅ | ✅ bài Audius, bài Jamendo nghệ sĩ cho tải, file của bạn. ❌ video YouTube (chỉ xem online) |
+| Tải về nghe offline | ✅ | ✅ bài Audius, bài Jamendo nghệ sĩ cho tải, file của bạn. Video YouTube: tải MP3 qua trang chuyển đổi rồi chọn file (bước 5) |
 | Video YouTube | Nghe như bài hát (tắt màn hình vẫn phát) | Xem trong khung video trên cùng màn hình (quy định của YouTube), khoá màn hình thì dừng |
 | Mở app khi không có mạng | ✅ | ✅ |
 | Tắt màn hình vẫn phát, tự chuyển bài | ✅ (phát bằng code iOS gốc) | ⚠️ Thường được, nhưng iOS có thể dừng sau bài đang phát |
@@ -17,7 +17,8 @@ Bản web không cần SideStore và không cần máy tính. Bạn mở link b�
 
 **YouTube trên bản web khác app iPhone thế nào?** App iPhone tự lấy file nhạc của YouTube nên phát nền và tải về được. Trang web thì không làm thế được: trình duyệt chặn (CORS), và Melo không dùng server trung gian. Bản web chỉ dùng được những gì YouTube cho phép trang web làm:
 - **Tìm kiếm** qua YouTube Data API (cần khoá API miễn phí của bạn, bước 4).
-- **Phát** bằng trình phát YouTube chính thức nhúng vào trang. Video phải hiện trên màn hình, không được ẩn hay tách lấy tiếng, và **không tải về được**.
+- **Phát** bằng trình phát YouTube chính thức nhúng vào trang. Video phải hiện trên màn hình, không được ẩn hay tách lấy tiếng.
+- **Tải về**: Melo không tự tải được, nhưng mở giúp trang chuyển đổi bạn hay dùng (trang yt2…, y2mate…). Bạn tải MP3 về app Tệp, chọn file trong Melo là bài đó nghe offline được (bước 5).
 
 **Audius và Jamendo** là nơi **nghệ sĩ tự đăng bài**: nghe trọn bài, tải về nghe offline được, nhưng không có bài hit của các hãng đĩa lớn. Bài hit V-pop, US-UK thì tìm qua YouTube (bước 4), hoặc dùng app iPhone để tải về nghe offline.
 
@@ -75,11 +76,28 @@ Từ đó trang chủ có thêm **Nhạc thịnh hành trên YouTube** và **Th�
 - **Khoá màn hình hoặc chuyển app thì video dừng** (iOS dừng video của trang web). Muốn nghe nền thì dùng bài Audius/Jamendo đã tải, hoặc app iPhone.
 - Có video bị chủ kênh **chặn phát ngoài YouTube**: Melo bỏ qua bài đó và chuyển bài sau.
 
+## Bước 5 (tuỳ chọn): Tải MP3 của video YouTube để nghe offline
+
+Melo bản web không tự lấy được file nhạc của YouTube, nên dùng trang chuyển đổi bạn hay dùng (trang yt2…, y2mate…):
+
+1. **Một lần:** Melo → **Cài đặt → Nguồn nhạc → Trang tải MP3 từ YouTube**, dán địa chỉ trang, bấm **Lưu**.
+   - Nếu trang nhận link video ngay trên địa chỉ, thay link bằng `{url}`, ví dụ `https://trang-cua-ban.com/?url={url}` (hoặc `{id}` cho id video). Melo mở trang với link điền sẵn.
+   - Không thì chỉ dán địa chỉ trang. Melo copy sẵn link video để bạn dán vào ô của trang.
+2. Ở video muốn tải: menu **⋮ → Tải MP3 qua trang chuyển đổi**. Melo mở trang, copy link video và ghi bài vào mục **Đã tải → Chờ file**.
+3. Trên trang chuyển đổi, bấm tải **MP3**. Safari lưu vào app **Tệp → Tải về**. Trang hay có quảng cáo và nút giả: chỉ bấm nút tải MP3, không cài app, không bấm "Cho phép" thông báo.
+4. Quay lại Melo, chọn một trong hai cách:
+   - **Đã tải → Chờ file → Chọn file** ở đúng bài, rồi chọn file vừa tải.
+   - Hoặc tải xong nhiều bài thì vào **Thư viện → Thêm nhạc từ máy** và chọn tất cả. Melo so tên file (bỏ phần thừa như "y2mate.com - …_128kbps"), id video và thời lượng để tự gắn file vào đúng bài đang chờ. File không khớp thì thành bài mới như file nhạc thường.
+
+Bài đã có file thì phát file luôn, kể cả khi có mạng: **nghe offline, tắt màn hình vẫn phát**, không cần khung video. Bài đang phát dở bằng video thì chuyển sang file ngay khi bạn chọn file. Muốn bỏ file thì menu ⋮ → **Xoá bản đã tải**: bài lại phát bằng video YouTube.
+
+> File MP4 (video) cũng chọn được: Melo phát phần tiếng. Chỉ dùng cho nghe cá nhân. Tải nhạc từ YouTube bằng trang bên ngoài là trái điều khoản của YouTube, bạn tự chịu trách nhiệm.
+
 ## Dùng
 
 - **Trang chủ:** có khoá YouTube thì đầu tiên là *Nhạc thịnh hành trên YouTube* và *Thịnh hành US-UK*. Sau đó là các hàng Audius: *Thịnh hành tuần này*, *Mới phát hành* (bài ra trong 30 ngày đang được nghe), *Nghệ sĩ đang nổi*, *Playlist thịnh hành*, các thể loại (Pop, Hip-hop & Rap, Điện tử, R&B, Lo-fi). Có Client ID Jamendo thì thêm các hàng của Jamendo.
 - **Tìm kiếm:** bài, video, nghệ sĩ/kênh, album, playlist. Kết quả YouTube đứng trước, xen kẽ với Audius và Jamendo.
-- **Tải về:** bấm ⬇ ở album/playlist, hoặc **Tải về** trong menu ⋮ của bài. Bài Audius tải được hết (bài trả phí không hiện trong app). Có nghệ sĩ Jamendo chỉ cho nghe online: bài đó báo "không cho tải". Video YouTube không có nút tải.
+- **Tải về:** bấm ⬇ ở album/playlist, hoặc **Tải về** trong menu ⋮ của bài. Bài Audius tải được hết (bài trả phí không hiện trong app). Có nghệ sĩ Jamendo chỉ cho nghe online: bài đó báo "không cho tải". Video YouTube: **Tải MP3 qua trang chuyển đổi** (bước 5).
 - **Nhạc của bạn:** **Thư viện → Thêm nhạc từ máy**, chọn file MP3/M4A trong app **Tệp** hoặc **iCloud Drive**. Melo đọc tên bài, nghệ sĩ, ảnh bìa có sẵn trong file, rồi lưu vào **Đã tải**. Bạn thích, xếp playlist và nghe offline như bài bình thường.
 - **Không có mạng:** mở Melo từ màn hình chính như mọi khi. App chỉ phát bài đã tải.
 
@@ -105,5 +123,6 @@ npx vite preview --mode web --outDir dist-web   # thử service worker / offline
   - `music.ts` / `stream.ts`: thay cho `src/youtube/*` khi build `--mode web`. Gộp các nguồn, chọn nguồn theo tiền tố id (`yt-`, `au-`, `jm-`, `lf-` = file tự thêm).
   - `tags.ts`: đọc thẻ ID3/M4A.
   - `local-files.ts`: thêm file từ máy.
+  - `youtube-files.ts`: luồng tải MP3 qua trang chuyển đổi (trang trong Cài đặt, danh sách chờ file, tự khớp file với video, gắn file vào bài `yt-…`).
   - `service-worker.js`: lưu giao diện để mở offline.
 - Hằng số `__WEB_APP__` thay lúc build: phần riêng của từng bản bị loại khỏi bản kia.

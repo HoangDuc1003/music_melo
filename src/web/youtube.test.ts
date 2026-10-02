@@ -148,7 +148,7 @@ describe('YouTube (bản web)', () => {
   it('phát bằng trình phát nhúng (link youtube:), không tải về được', async () => {
     expect(getCachedAudio('yt-aaaaaaaaaaa')).toMatchObject({ url: 'youtube:aaaaaaaaaaa', mimeType: 'video/youtube' });
     expect((await resolveAudio('yt-aaaaaaaaaaa')).url).toBe('youtube:aaaaaaaaaaa');
-    await expect(resolveAudio('yt-aaaaaaaaaaa', { download: true })).rejects.toThrow(/chỉ xem online/);
+    await expect(resolveAudio('yt-aaaaaaaaaaa', { download: true })).rejects.toThrow(/trang chuyển đổi/);
     expect(canDownload('yt-aaaaaaaaaaa')).toBe(false);
     expect(canDownload('au-D7KyD')).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();

@@ -242,6 +242,8 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
   }
 
   async updateItem(options: { id: string; url?: string; fileUrl?: string; headers?: Record<string, string> }): Promise<void> {
+    // Video YouTube đang phát vừa có file tải về (bản web): chuyển sang phát file ngay, giữ vị trí.
+    const toFile = Boolean(options.fileUrl) && this.current?.id === options.id && this.engine === this.youtube && !this.waitingForUrl;
     for (const item of this.items) {
       if (item.id !== options.id) continue;
       if (options.url !== undefined) item.url = options.url;
@@ -251,6 +253,7 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
     if (this.waitingForUrl && this.current?.id === options.id && (this.current.fileUrl || this.current.url)) {
       this.load(this.index, this.resumeAt, this.playWhenReady);
     }
+    if (toFile) this.load(this.index, this.engine.currentTime, !this.engine.paused || this.engine.buffering);
   }
 
   async play(): Promise<void> {

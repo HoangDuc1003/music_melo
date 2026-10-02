@@ -1,5 +1,5 @@
-// Mục "Nguồn nhạc" trong Cài đặt của bản web: khoá API YouTube (tuỳ chọn), Audius (luôn bật), Client ID Jamendo
-// (tuỳ chọn), bộ nhớ trình duyệt đang dùng.
+// Mục "Nguồn nhạc" trong Cài đặt của bản web: khoá API YouTube và trang tải MP3 (tuỳ chọn), Audius (luôn bật),
+// Client ID Jamendo (tuỳ chọn), bộ nhớ trình duyệt đang dùng.
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { SettingsRow } from '@/components/SettingsRow';
@@ -8,6 +8,7 @@ import { runAction } from '@/ui/overlays';
 import { DEVPORTAL_URL, getJamendoClientId, isValidJamendoClientId, setJamendoClientId } from '@/web/jamendo';
 import { storageUsage, type StorageUsage } from '@/web/pwa';
 import { getYouTubeApiKey, isValidYouTubeApiKey, setYouTubeApiKey } from '@/web/youtube';
+import { getConverterUrl, isValidConverterUrl, setConverterUrl } from '@/web/youtube-files';
 
 const GUIDE_URL = 'https://github.com/HoangDuc1003/music_melo/blob/main/docs/WEB.md';
 
@@ -73,17 +74,29 @@ function storageDetail(usage: StorageUsage | undefined): string {
 
 const short = (value: string) => `${value.slice(0, 6)}…`;
 
+type Editing = 'youtube' | 'converter' | 'jamendo';
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url.replace(/\{(url|id)\}/g, 'x')).hostname;
+  } catch {
+    return url;
+  }
+};
+
 export function WebSources() {
   const [youtubeKey, setYoutubeKey] = useState<string>();
   const [jamendoId, setJamendoId] = useState<string>();
-  const [editing, setEditing] = useState<'youtube' | 'jamendo'>();
+  const [converter, setConverter] = useState<string>();
+  const [editing, setEditing] = useState<Editing>();
   const [usage, setUsage] = useState<StorageUsage>();
   useEffect(() => {
     void getYouTubeApiKey().then(setYoutubeKey);
     void getJamendoClientId().then(setJamendoId);
+    void getConverterUrl().then((url) => setConverter(url || undefined));
     void storageUsage().then(setUsage);
   }, []);
-  const toggle = (source: 'youtube' | 'jamendo') => setEditing((current) => (current === source ? undefined : source));
+  const toggle = (source: Editing) => setEditing((current) => (current === source ? undefined : source));
   const finish = (set: (value: string | undefined) => void) => (value: string) => {
     set(value || undefined);
     setEditing(undefined);
@@ -93,7 +106,7 @@ export function WebSources() {
     <>
       <SettingsRow
         label="YouTube (tuỳ chọn)"
-        detail={youtubeKey ? `Đã có khoá API ${short(youtubeKey)} • xem online, không tải về` : 'Tìm mọi bài hát, MV trên YouTube: cần khoá API miễn phí'}
+        detail={youtubeKey ? `Đã có khoá API ${short(youtubeKey)} • xem online` : 'Tìm mọi bài hát, MV trên YouTube: cần khoá API miễn phí'}
         onClick={() => toggle('youtube')}
       />
       {editing === 'youtube' && (
@@ -116,7 +129,36 @@ export function WebSources() {
             <li>Sửa khoá: Website restrictions = địa chỉ web của Melo, API restrictions = YouTube Data API v3.</li>
             <li>Copy khoá (bắt đầu bằng AIza) dán vào đây.</li>
           </ol>
-          <p className="mt-2">Video YouTube phát trong khung video trên cùng màn hình, chỉ xem online. Mỗi ngày tìm được khoảng 100 lần.</p>
+          <p className="mt-2">Video YouTube phát trong khung video trên cùng màn hình (xem online). Muốn nghe offline thì tải MP3 qua trang chuyển đổi (mục bên dưới). Mỗi ngày tìm được khoảng 100 lần.</p>
+        </KeyForm>
+      )}
+      <SettingsRow
+        label="Trang tải MP3 từ YouTube"
+        detail={converter ? `${hostOf(converter)} • menu ⋮ của video → Tải MP3` : 'Trang chuyển đổi bạn hay dùng: tải MP3 về máy để nghe offline'}
+        onClick={() => toggle('converter')}
+      />
+      {editing === 'converter' && (
+        <KeyForm
+          label="Trang tải MP3 từ YouTube"
+          placeholder="https://…/?url={url}"
+          initial={converter ?? ''}
+          valid={isValidConverterUrl}
+          save={setConverterUrl}
+          done="Đã lưu trang tải MP3"
+          onDone={finish(setConverter)}
+        >
+          <p>
+            Bản web không tự tải được nhạc YouTube, nên Melo mở trang chuyển đổi bạn hay dùng (trang yt2…, y2mate…) kèm link video. Tải MP3 về
+            app Tệp xong, quay lại Melo chọn file: bài đó nghe offline được, tắt màn hình vẫn phát.
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>Dán địa chỉ trang, ví dụ https://trang-cua-ban.com.</li>
+            <li>
+              Nếu trang nhận link video ngay trên địa chỉ, thay link bằng <b className="text-white">{'{url}'}</b> (hoặc <b className="text-white">{'{id}'}</b> cho
+              id video), ví dụ https://trang-cua-ban.com/?url={'{url}'}. Không thì Melo copy sẵn link, bạn dán vào ô của trang.
+            </li>
+            <li>Các trang này hay có quảng cáo và nút tải giả: chỉ bấm nút tải MP3, không cài app hay cho phép thông báo.</li>
+          </ul>
         </KeyForm>
       )}
       <SettingsRow label="Audius" detail="Đang dùng • không cần đăng ký • bài mới mỗi ngày" />

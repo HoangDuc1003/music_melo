@@ -2,7 +2,7 @@
 import { FolderUp } from 'lucide-react';
 import { useRef } from 'react';
 import { runAction, toast } from '@/ui/overlays';
-import { importAudioFiles } from '@/web/local-files';
+import { AUDIO_ACCEPT, importAudioFiles } from '@/web/local-files';
 
 export function ImportMusicRow() {
   const input = useRef<HTMLInputElement>(null);
@@ -12,9 +12,10 @@ export function ImportMusicRow() {
     if (!files.length) return;
     toast(`Đang thêm ${files.length} file…`);
     void runAction(async () => {
-      const { added, skipped } = await importAudioFiles(files);
-      if (!added) return toast('Không có bài mới (file đã thêm rồi hoặc không phải file nhạc)');
-      toast(`Đã thêm ${added} bài vào Đã tải${skipped ? ` • bỏ qua ${skipped} file` : ''}`);
+      const { added, attached, skipped } = await importAudioFiles(files);
+      if (!added && !attached) return toast('Không có bài mới (file đã thêm rồi hoặc không phải file nhạc)');
+      const parts = [added && `thêm ${added} bài`, attached && `gắn ${attached} file vào bài YouTube đang chờ`].filter(Boolean);
+      toast(`Đã ${parts.join(', ')}${skipped ? ` • bỏ qua ${skipped} file` : ''}`);
     });
   };
   return (
@@ -28,7 +29,7 @@ export function ImportMusicRow() {
           <div className="truncate text-[13px] text-subdued">MP3, M4A… trong app Tệp hoặc iCloud Drive</div>
         </div>
       </button>
-      <input ref={input} type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.opus" multiple hidden onChange={(e) => onFiles(e.target.files)} />
+      <input ref={input} type="file" accept={AUDIO_ACCEPT} multiple hidden onChange={(e) => onFiles(e.target.files)} />
     </>
   );
 }

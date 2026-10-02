@@ -22,7 +22,8 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
   Vercel (`vercel.json`, no serverless functions — still no backend). Browsers can't fetch YouTube media (CORS), so
   the web flavor has **no YouTube downloads and no Spotify**. Music = **YouTube** (user-approved 2026-10-02: the user
   could not find the music videos they wanted; search via Data API v3 with the user's own API key, playback **only**
-  through the official IFrame player shown on screen — online only, no background, no download, per YouTube ToS) +
+  through the official IFrame player shown on screen — online only, no background; offline = user downloads the MP3
+  from a converter site of their choice ("yt2…", set in Settings) and picks the file in Melo, see below) +
   **Audius** (open API, no key, CORS, full tracks, downloadable) + **Jamendo** (optional Client ID in Settings or
   `VITE_JAMENDO_CLIENT_ID`) + the user's **own audio files**. Audius/Jamendo have no major-label hits. The iPhone app
   stays the full version (YouTube Music with downloads).
@@ -158,7 +159,21 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   (ToS); "Ẩn video" pauses then collapses (height 0, iframe stays mounted); playing/buffering re-opens; hint "Chạm vào
   video…" after 2.5 s stuck (iOS first-play gesture). Web CSP: `script-src 'self' https://www.youtube.com
   https://s.ytimg.com`, `frame-src https://www.youtube.com`. Tests: `src/web/youtube.test.ts`,
-  `src/player/web-plugin.test.ts` (fake `window.YT`). `audius.ts` (`https://api.audius.co/v1`, `app_name=Melo`, response `{data}`; anonymous
+  `src/player/web-plugin.test.ts` (fake `window.YT`).
+  **MP3 via converter site** (`web/youtube-files.ts`, user-requested 2026-10-02): setting `ytConverterUrl` (https,
+  `{url}` = encoded watch URL, `{id}` = video id, else opened as is + link copied); TrackMenu (web, `yt-` without a
+  download row) → "Tải MP3 qua trang chuyển đổi" (`ui/youtube-files.ts`: `window.open` synchronously in the tap — the
+  template is preloaded with `useLiveQuery` — + `copyText` + `markPending`) and "Chọn file đã tải cho bài này"
+  (`ui/pick-files.ts` creates/clicks an `<input type=file>` synchronously). Pending list = setting `ytPendingFiles`
+  `{id, at}[]` (7 days, max 50, rows with a done download are hidden); Downloads page shows `PendingVideos`
+  ("Chờ file…"). `importAudioFiles` first runs `matchPending` against pending videos: video id in the file name wins,
+  else name score ≥ 0.75 (and ≥ 0.1 above the runner-up) on "core" words (fold, drop filler like official/mv/lyrics
+  and artist words, split video titles on `|`, `cleanFileName` drops "y2mate.com - " / "_128kbps") with durations
+  within max(10 s, 5 %). `attachToVideo` saves the file under the `yt-` id via `addLocalFiles` (keeps the video's
+  title/thumbnail), removes it from pending, calls `refreshLocalFile`. A `yt-` track with a done row plays the file with
+  `<audio>` (works offline / screen-off); `VideoStage` stays closed for it; the web plugin's `updateItem` switches the
+  current item from the YouTube engine to the file at the same position. Accept list `AUDIO_ACCEPT` includes MP4 (the
+  `<audio>` element plays its sound). Tests: `src/web/youtube-files.test.ts`. `audius.ts` (`https://api.audius.co/v1`, `app_name=Melo`, response `{data}`; anonymous
   limit = 5 req per sliding 1 s per IP → `throttle()` spaces calls 4 per 1.1 s, 429 → retry ×2; ids `au-<hashid>` for
   tracks/users/playlists; gated/paid/deleted tracks filtered by `isPlayable`; Home = trending week, "Mới phát hành"
   (trending week+month released ≤30 days, else ≤90, newest first), rising artists, trending playlists, 5 genres;
@@ -175,8 +190,8 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   `navigator.storage.persist/estimate`). Web CSP drops `'unsafe-eval'` and allows `connect-src https:`. The web player
   (`plugins/player/src/web.ts`) sets Media Session (lock screen). `SAFE_ID` is now `[\w-]{3,64}`; `withRange` only
   touches googlevideo URLs. Verified with unit tests + Playwright against `vite preview` of `dist-web` with
-  `context.route` stubbing googleapis / youtube.com iframe_api + embed / api.audius.co / api.jamendo.com / storage (17
-  steps incl. video stage layout, offline reload via SW; Playwright does not route the request after a fulfilled 302,
+  `context.route` stubbing googleapis / youtube.com iframe_api + embed / converter page / api.audius.co / api.jamendo.com
+  / storage (20 steps incl. video stage layout, converter MP3 flow, offline reload via SW; Playwright does not route the request after a fulfilled 302,
   so the stub serves `/stream` audio directly). **Not verified against real YouTube/Audius/Jamendo** (container egress
   blocks all three; iOS first-play gesture behaviour of the IFrame player is unknown until the user tries): Jamendo CORS, and whether Audius content nodes answer the
   redirected `fetch()` with CORS (mediorum uses echo `middleware.CORS()`, so it should). The SW matches precached files
@@ -239,7 +254,7 @@ TODO (next sessions):
 - `npm run dev` — Vite on :5173 with the YouTube dev proxy (`/__proxy/<host>/…`, see `vite.config.ts`);
   `MELO_LAN=1 npm run dev` to expose it on the LAN. `npm run dev:mock` — sample data, no YouTube needed.
 - `npm run build` — typecheck + build. `npm test` — vitest (jsdom + fake-indexeddb).
-- `npm run dev:web` / `npm run build:web` (→ `dist-web/`, what Vercel runs) — web flavor. Web smoke test (17 steps incl.
+- `npm run dev:web` / `npm run build:web` (→ `dist-web/`, what Vercel runs) — web flavor. Web smoke test (20 steps incl.
   offline reload): `npx vite preview --mode web --outDir dist-web --port 4175`, then `CHROMIUM_PATH=… node scripts/web-smoke.mjs`.
 - `npx cap sync ios` — copy web build + update iOS SPM package list after adding plugins.
 - `cd plugins/player && swift test` — native queue tests (macOS/Linux; CI runs them on every push).

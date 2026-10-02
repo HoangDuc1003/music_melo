@@ -109,4 +109,21 @@ describe('plugin phát nhạc bản web', () => {
     FakeYTPlayer.last!.state(0);
     expect(FakeYTPlayer.last!.calls.slice(-2)).toEqual(['seek 0', 'play']);
   });
+
+  it('video đang phát vừa có file tải về: chuyển sang phát file (thẻ <audio>) ở đúng vị trí', async () => {
+    await plugin.setQueue({ items: [item('yt-a', 'youtube:aaaaaaaaaaa')], startIndex: 0 });
+    await flush();
+    const player = FakeYTPlayer.last!;
+    player.ready();
+    player.state(1);
+    player.time = 42;
+    await plugin.updateItem({ id: 'yt-a', fileUrl: 'blob:melo/1' });
+    expect(player.calls.at(-1)).toBe('stop');
+    expect(HTMLMediaElement.prototype.play).toHaveBeenCalled();
+    expect(states.at(-1)).toMatchObject({ id: 'yt-a' });
+    // Bài khác có file thì không đổi bài đang phát.
+    const before = player.calls.length;
+    await plugin.updateItem({ id: 'yt-khac', fileUrl: 'blob:melo/2' });
+    expect(player.calls.length).toBe(before);
+  });
 });

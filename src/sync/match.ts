@@ -3,11 +3,13 @@
 import { Semaphore } from '@/lib/async';
 import { db, rememberTracks } from '@/lib/db';
 import { log } from '@/lib/log';
-import { cleanArtist, cleanTitle, fold } from '@/lib/text';
+import { cleanArtist, cleanTitle, similarity } from '@/lib/text';
 import { search } from '@/youtube/music';
 import { tracksOf } from '@/youtube/normalize';
 import type { Track } from '@/youtube/types';
 import type { SourceTrack } from './spotify-api';
+
+export { similarity } from '@/lib/text';
 
 /** Không tìm thấy: 7 ngày sau mới thử lại (YouTube có thể đã có bài). */
 const MISS_RETRY_MS = 7 * 24 * 3600_000;
@@ -23,29 +25,6 @@ export function cleanSpotifyTitle(title: string): string {
     .replace(/\s+-\s+[^-]*\b(remaster(ed)?|version|live|edit|mix|mono|stereo|acoustic|instrumental|ver)\b.*$/i, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
-}
-
-/** Độ giống nhau 0..1 theo từ (hệ số Dice); chuỗi này nằm trọn trong chuỗi kia thì ≥ 0.9. */
-export function similarity(a: string, b: string): number {
-  const A = fold(a);
-  const B = fold(b);
-  if (!A || !B) return 0;
-  if (A === B) return 1;
-  const ta = A.split(' ');
-  const tb = B.split(' ');
-  const pool = new Map<string, number>();
-  for (const t of tb) pool.set(t, (pool.get(t) ?? 0) + 1);
-  let common = 0;
-  for (const t of ta) {
-    const left = pool.get(t) ?? 0;
-    if (left > 0) {
-      common += 1;
-      pool.set(t, left - 1);
-    }
-  }
-  const dice = (2 * common) / (ta.length + tb.length);
-  const contained = ` ${B} `.includes(` ${A} `) || ` ${A} `.includes(` ${B} `);
-  return contained ? Math.max(dice, 0.9) : dice;
 }
 
 export interface MatchScore {

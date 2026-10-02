@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { create } from 'zustand';
 import { VIDEO_SLOT_ID } from 'capacitor-melo-player';
+import { useDownloads } from '@/downloads/manager';
 import { pause } from '@/player/controller';
 import { currentEntry, usePlayer } from '@/player/store';
 import { YOUTUBE_PREFIX } from '@/web/youtube';
@@ -16,7 +17,9 @@ export function VideoStage() {
   const trackId = usePlayer((s) => currentEntry(s)?.track.id);
   const playing = usePlayer((s) => s.playing);
   const buffering = usePlayer((s) => s.buffering);
-  const isVideo = Boolean(trackId?.startsWith(YOUTUBE_PREFIX));
+  // Bài YouTube đã có file (tải qua trang chuyển đổi) thì phát file bằng <audio>, không cần khung video.
+  const hasFile = useDownloads((s) => Boolean(trackId && s.rows.get(trackId)?.status === 'done'));
+  const isVideo = Boolean(trackId?.startsWith(YOUTUBE_PREFIX)) && !hasFile;
   const [hidden, setHidden] = useState(false);
   const [stuck, setStuck] = useState(false);
   const stage = useRef<HTMLDivElement>(null);
@@ -69,7 +72,7 @@ export function VideoStage() {
       </div>
       <div className="flex h-9 items-center gap-2 pr-1 pl-3 text-[12px] text-white/70">
         <span className={`min-w-0 flex-1 truncate ${stuck ? 'font-semibold text-accent' : ''}`}>
-          {stuck ? 'Chạm vào video để bắt đầu phát' : 'Video YouTube • chỉ xem online'}
+          {stuck ? 'Chạm vào video để bắt đầu phát' : 'Video YouTube • ⋮ → Tải MP3 để nghe offline'}
         </span>
         <button className="flex items-center gap-1 rounded-full px-2.5 py-1.5 active:bg-white/10" onClick={hide}>
           <X size={14} /> Ẩn video
