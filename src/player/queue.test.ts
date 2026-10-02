@@ -14,6 +14,8 @@ import {
   shuffleKeepingCurrent,
   unshuffle,
   upcomingIndices,
+  withoutSmartPicks,
+  withSmartPicks,
   type QueueEntry
 } from './queue';
 
@@ -79,6 +81,17 @@ describe('insertPosition', () => {
     expect(insertIntoOriginalOrder(order, shuffled, c.uid, [n], 'queue')).toEqual([a.uid, b.uid, c.uid, q.uid, n.uid]);
     expect(insertIntoOriginalOrder(order, shuffled, a.uid, [n], 'radio')).toEqual([...order, n.uid]);
     expect(insertIntoOriginalOrder(order, shuffled, undefined, [n], 'next')).toEqual([...order, n.uid]);
+  });
+});
+
+describe('Trộn thông minh', () => {
+  it('chèn bài gợi ý sau mỗi 3 bài sắp phát, gỡ ra thì giữ bài đang phát', () => {
+    const list = makeEntries(tracks('a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'));
+    const picks = makeEntries(tracks('s1', 's2', 's3'), 'smart');
+    const mixed = withSmartPicks(list, 1, picks);
+    expect(mixed.map((e) => e.track.id)).toEqual(['a', 'b', 'c', 'd', 'e', 's1', 'f', 'g', 'h', 's2']);
+    expect(withoutSmartPicks(mixed).map((e) => e.track.id)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']);
+    expect(withoutSmartPicks(mixed, picks[0].uid).map((e) => e.track.id)).toContain('s1');
   });
 });
 

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { EllipsisVertical, GripVertical } from 'lucide-react';
+import { EllipsisVertical, GripVertical, Sparkles } from 'lucide-react';
 import { joinArtists } from '@/lib/format';
 import { move, setAutoplay, skipTo } from '@/player/controller';
 import type { QueueEntry } from '@/player/queue';
@@ -21,7 +21,10 @@ function QueueRow({ entry, onPlay, onMenu, handle }: { entry: QueueEntry; onPlay
         <TrackArtwork track={entry.track} size={44} className="size-11 shrink-0" />
         <div className="min-w-0">
           <div className="truncate text-[15px]">{entry.track.title}</div>
-          <div className="truncate text-[13px] text-subdued">{joinArtists(entry.track.artists)}</div>
+          <div className="truncate text-[13px] text-subdued">
+            {entry.origin === 'smart' && <Sparkles size={12} className="mr-1 inline align-[-1px] text-accent" aria-label="Bài gợi ý" />}
+            {joinArtists(entry.track.artists)}
+          </div>
         </div>
       </button>
       <button className="p-2 text-subdued" aria-label="Tuỳ chọn" onClick={onMenu}>

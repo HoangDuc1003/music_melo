@@ -361,6 +361,39 @@ describe('sửa hàng chờ', () => {
     expect(storeIds()[usePlayer.getState().index]).toBe('c');
     expect(native.ids()).toEqual(storeIds());
   });
+
+  it('Trộn thông minh: tắt → trộn → chèn bài gợi ý (không trùng) → tắt thì gỡ bài gợi ý, giữ bài đang phát', async () => {
+    youtube.getUpNext.mockImplementation(async (id: string) => tracks(`${id}-x`, `${id}-y`, 'b'));
+    await player.playTracks(tracks('a', 'b', 'c', 'd', 'e', 'f', 'g'), 0);
+    await settle();
+    expect(await player.cycleShuffle()).toEqual({ mode: 'shuffle' });
+    expect(await player.cycleShuffle()).toEqual({ mode: 'smart' });
+    const state = usePlayer.getState();
+    expect(state.smartShuffle).toBe(true);
+    const smart = state.entries.filter((e) => e.origin === 'smart');
+    expect(smart).toHaveLength(2); // 6 bài sắp phát → 1 bài gợi ý sau mỗi 3 bài
+    expect(smart.every((e) => !tracks('a', 'b', 'c', 'd', 'e', 'f', 'g').some((t) => t.id === e.track.id))).toBe(true);
+    expect(state.entries.findIndex((e) => e.origin === 'smart')).toBe(state.index + 4);
+    expect(native.ids()).toEqual(storeIds());
+
+    // Đang phát một bài gợi ý rồi tắt trộn: bài đó vẫn phát, các bài gợi ý khác bị gỡ.
+    const pick = state.entries.findIndex((e) => e.origin === 'smart');
+    native.emit('itemChanged', { index: pick, id: state.entries[pick].track.id });
+    expect(await player.cycleShuffle()).toEqual({ mode: 'off' });
+    const after = usePlayer.getState();
+    expect(after).toMatchObject({ shuffle: false, smartShuffle: false });
+    expect(after.entries.filter((e) => e.origin === 'smart').map((e) => e.track.id)).toEqual([state.entries[pick].track.id]);
+    expect(storeIds()[after.index]).toBe(state.entries[pick].track.id);
+    expect(native.ids()).toEqual(storeIds());
+  });
+
+  it('Trộn thông minh khi không lấy được bài gợi ý: tắt trộn và báo', async () => {
+    await player.playTracks(tracks('a', 'b', 'c', 'd'), 0);
+    await player.cycleShuffle();
+    youtube.getUpNext.mockRejectedValue(new Error('offline'));
+    expect(await player.cycleShuffle()).toEqual({ mode: 'off', smartUnavailable: true });
+    expect(storeIds()).toEqual(['a', 'b', 'c', 'd']);
+  });
 });
 
 describe('chạm nhanh liên tiếp', () => {

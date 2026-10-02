@@ -59,6 +59,10 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
   the `*Locked` internals. Concurrent radio requests share one in-flight promise (queue end waits for it). Network
   state lives in `lib/network.ts` (`initNetwork()` first in main.tsx); the controller subscribes to `useNetwork` and
   re-resolves links when the connection type changes. History is pruned to 2000 rows on launch (`pruneHistory`).
+  **Smart Shuffle**: `cycleShuffle()` off → shuffle → smart → off; smart picks = radio of the current track + 2 random
+  upcoming ones (round-robin, never a track already queued), one every 3 upcoming tracks (max 20), origin `'smart'`
+  (✨ in the queue sheet), store/snapshot flag `smartShuffle`; turning shuffle off removes smart picks except the one
+  playing; no picks (offline / nothing new) → shuffle off + `smartUnavailable`. `playTracks` resets smart.
 - **UI** (`src/App.tsx`, `components/`, `pages/`, `ui/`): per-tab nav stacks (`ui/nav.ts`, pages kept mounted with
   `hidden`), iOS edge-swipe back (`EdgeSwipeBack`, 12px strip), slide-in pages, mini player (swipe to skip), full
   player (drag down to close, artwork colour), queue sheet (drag handles), LRCLIB/YouTube lyrics, track menu, playlist

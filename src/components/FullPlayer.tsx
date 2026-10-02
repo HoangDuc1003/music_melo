@@ -10,17 +10,18 @@ import {
   Repeat1,
   Shuffle,
   SkipBack,
+  Sparkles,
   SkipForward
 } from 'lucide-react';
 import { joinArtists } from '@/lib/format';
 import { useIsLiked } from '@/lib/library';
-import { cycleRepeat, next, previous, togglePlay, toggleShuffle } from '@/player/controller';
+import { cycleRepeat, cycleShuffle, next, previous, shuffleMode, togglePlay, type ShuffleMode } from '@/player/controller';
 import type { RepeatMode } from 'capacitor-melo-player';
 import type { PlayContext } from '@/player/queue';
 import { currentEntry, usePlayer } from '@/player/store';
 import { useArtworkColor, useSlideIn } from '@/ui/hooks';
 import { navigate } from '@/ui/nav';
-import { closePlayer, openSleepTimer, openTrackMenu, setPanel, toggleLikeWithToast, useOverlays } from '@/ui/overlays';
+import { closePlayer, openSleepTimer, openTrackMenu, runAction, setPanel, toast, toggleLikeWithToast, useOverlays } from '@/ui/overlays';
 import { TrackArtwork } from './TrackArtwork';
 import { LyricsPanel } from './LyricsPanel';
 import { PlayPauseIcon } from './PlayPauseIcon';
@@ -38,6 +39,15 @@ const CONTEXT_LABEL: Record<PlayContext['type'], string> = {
 };
 
 const REPEAT_LABEL: Record<RepeatMode, string> = { off: 'Không lặp', all: 'Lặp tất cả', one: 'Lặp một bài' };
+const SHUFFLE_LABEL: Record<ShuffleMode, string> = { off: 'Trộn bài', shuffle: 'Đang trộn bài (bấm để trộn thông minh)', smart: 'Đang trộn thông minh' };
+
+/** Nút trộn kiểu Spotify: tắt → trộn → trộn thông minh (thêm bài gợi ý) → tắt. */
+const onShuffle = () =>
+  runAction(async () => {
+    const { mode, smartUnavailable } = await cycleShuffle();
+    if (smartUnavailable) toast('Không tìm được bài gợi ý mới (hoặc đang mất mạng), đã tắt trộn bài');
+    else toast(mode === 'smart' ? 'Trộn thông minh: đã thêm bài gợi ý ✨' : mode === 'shuffle' ? 'Đã bật trộn bài' : 'Đã tắt trộn bài');
+  });
 
 /** Trình phát toàn màn hình: vuốt xuống để đóng, nền theo màu ảnh bìa. */
 export function FullPlayer() {
@@ -47,7 +57,7 @@ export function FullPlayer() {
   const playing = usePlayer((s) => s.playing);
   const buffering = usePlayer((s) => s.buffering);
   const duration = usePlayer((s) => s.duration || currentEntry(s)?.track.duration || 0);
-  const shuffle = usePlayer((s) => s.shuffle);
+  const shuffle = usePlayer((s) => shuffleMode(s));
   const repeat = usePlayer((s) => s.repeat);
   const context = usePlayer((s) => s.context);
   const sleepActive = usePlayer((s) => Boolean(s.sleepTimerEndsAt || s.sleepAtEndOfItem));
@@ -164,8 +174,14 @@ export function FullPlayer() {
         </div>
 
         <div className="mt-2 flex items-center justify-between">
-          <button className={`p-2 active:scale-90 ${shuffle ? 'text-accent' : ''}`} aria-label="Trộn bài" aria-pressed={shuffle} onClick={() => void toggleShuffle()}>
+          <button
+            className={`relative p-2 active:scale-90 ${shuffle !== 'off' ? 'text-accent' : ''}`}
+            aria-label={SHUFFLE_LABEL[shuffle]}
+            aria-pressed={shuffle !== 'off'}
+            onClick={() => void onShuffle()}
+          >
             <Shuffle size={24} />
+            {shuffle === 'smart' && <Sparkles size={12} className="absolute top-1 right-0.5 fill-accent" />}
           </button>
           <button className="p-2 active:scale-90" aria-label="Bài trước" onClick={() => void previous()}>
             <SkipBack size={34} fill="white" />

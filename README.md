@@ -30,6 +30,7 @@
 - **Tìm kiếm** có gợi ý khi gõ. Dán link bài, playlist hoặc album YouTube vào ô tìm kiếm để mở thẳng.
 - **Phát nền thật:** tắt màn hình vẫn phát và tự chuyển bài. Điều khiển được từ màn hình khoá và tai nghe.
 - **Hàng chờ kiểu Spotify:** *Phát tiếp*, *Thêm vào hàng chờ*, kéo thả để đổi thứ tự, trộn bài, lặp lại.
+- **Trộn thông minh** (như Smart Shuffle của Spotify Premium): bấm nút trộn lần nữa, Melo chèn bài gợi ý ✨ hợp gu xen giữa danh sách. Tắt trộn thì các bài gợi ý tự biến mất.
 - **Radio tự động:** sắp hết hàng chờ thì app tự nối thêm bài tương tự.
 - **Dành cho bạn** (kiểu Spotify): *Daily Mix* theo các nghệ sĩ bạn hay nghe, *Khám phá hằng tuần* (bài chưa nghe, đổi mỗi thứ Hai), *Nghe lại*, *Nhạc buổi sáng/tối của bạn*. Tính ngay trên máy từ lịch sử nghe, không gửi đi đâu.
 - **Lời bài hát** chạy theo nhạc (LRCLIB). Có **hẹn giờ tắt**.

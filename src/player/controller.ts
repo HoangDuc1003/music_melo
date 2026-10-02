@@ -31,6 +31,8 @@ import {
   shuffleKeepingCurrent,
   unshuffle,
   upcomingIndices,
+  withoutSmartPicks,
+  withSmartPicks,
   type InsertMode,
   type PlayContext,
   type QueueEntry
@@ -293,6 +295,7 @@ export function saveSnapshot() {
         position: s.position,
         repeat: s.repeat,
         shuffle: s.shuffle,
+        smartShuffle: s.smartShuffle,
         originalOrder: s.originalOrder,
         context: s.context
       })
@@ -378,7 +381,7 @@ async function playTracksLocked(tracks: Track[], startIndex: number, options: Pl
     index = 0;
   }
   radioFailedSeed = undefined;
-  set({ entries, index, shuffle, originalOrder, context: options.context, position: 0, positionAt: Date.now(), error: undefined });
+  set({ entries, index, shuffle, smartShuffle: false, originalOrder, context: options.context, position: 0, positionAt: Date.now(), error: undefined });
   void rememberTracks(tracks).catch(() => undefined);
   await replaceQueue(entries, index);
   afterQueueChange();
@@ -440,21 +443,88 @@ export function move(from: number, to: number, uid?: string): Promise<void> {
   });
 }
 
+/** Bật/tắt trộn bài (tắt thì gỡ luôn bài gợi ý của Trộn thông minh). */
 export function toggleShuffle(): Promise<void> {
+  return exclusive(() => setShuffleLocked(!usePlayer.getState().shuffle));
+}
+
+async function setShuffleLocked(on: boolean) {
+  const state = usePlayer.getState();
+  const current = currentEntry(state);
+  if (!state.entries.length || !current) {
+    set({ shuffle: on, smartShuffle: false });
+    return;
+  }
+  if (on === state.shuffle) return;
+  let entries: QueueEntry[];
+  if (on) {
+    entries = shuffleKeepingCurrent(state.entries, state.index);
+  } else {
+    const base = withoutSmartPicks(state.entries, current.uid);
+    entries = state.originalOrder ? unshuffle(base, state.originalOrder) : base;
+  }
+  const index = entries.findIndex((e) => e.uid === current.uid);
+  set({ entries, index, shuffle: on, smartShuffle: false, originalOrder: on ? state.entries.map((e) => e.uid) : undefined });
+  await replaceQueue(entries, index, { keepCurrent: true, play: state.playing });
+  afterQueueChange();
+}
+
+// ---------- Trộn thông minh (Smart Shuffle kiểu Spotify Premium) ----------
+
+/** Một bài gợi ý sau mỗi chừng này bài, tối đa SMART_MAX bài. */
+const SMART_EVERY = 3;
+const SMART_MAX = 20;
+
+/** Bài gợi ý: radio từ bài đang phát và 2 bài khác trong danh sách, lấy xen kẽ cho đa dạng, bỏ bài đã có. */
+async function smartPicks(entries: readonly QueueEntry[], index: number): Promise<Track[]> {
+  const upcoming = entries.slice(index + 1);
+  const want = Math.min(SMART_MAX, Math.ceil(upcoming.length / SMART_EVERY));
+  if (!want || !isOnline()) return [];
+  const seeds = [entries[index], ...shuffleKeepingCurrent(upcoming, -1).slice(0, 2)].filter(Boolean).map((e) => e.track);
+  const lists = await Promise.all(seeds.map((seed) => getUpNext(seed.id).catch(() => [])));
+  const taken = new Set(entries.map((e) => e.track.id));
+  const picks: Track[] = [];
+  for (let i = 0; picks.length < want && lists.some((list) => i < list.length); i++) {
+    for (const list of lists) {
+      const track = list[i];
+      if (!track || taken.has(track.id) || picks.length >= want) continue;
+      taken.add(track.id);
+      picks.push(track);
+    }
+  }
+  return picks;
+}
+
+export type ShuffleMode = 'off' | 'shuffle' | 'smart';
+
+export const shuffleMode = (state = usePlayer.getState()): ShuffleMode => (state.smartShuffle ? 'smart' : state.shuffle ? 'shuffle' : 'off');
+
+/**
+ * Nút trộn kiểu Spotify: tắt → trộn → trộn thông minh → tắt.
+ * Không lấy được bài gợi ý (mất mạng…) thì tắt trộn luôn và báo `smartUnavailable`.
+ */
+export async function cycleShuffle(): Promise<{ mode: ShuffleMode; smartUnavailable?: boolean }> {
+  const mode = shuffleMode();
+  if (mode !== 'shuffle') {
+    await toggleShuffle();
+    return { mode: shuffleMode() };
+  }
+  const { entries, index } = usePlayer.getState();
+  const picks = await smartPicks(entries, index);
   return exclusive(async () => {
     const state = usePlayer.getState();
-    const current = currentEntry(state);
-    if (!state.entries.length || !current) {
-      set({ shuffle: !state.shuffle });
-      return;
+    if (!state.shuffle || state.smartShuffle) return { mode: shuffleMode(state) };
+    if (!picks.length) {
+      await setShuffleLocked(false);
+      return { mode: 'off' as const, smartUnavailable: true };
     }
-    const turningOff = state.shuffle && state.originalOrder;
-    const entries = turningOff ? unshuffle(state.entries, state.originalOrder!) : shuffleKeepingCurrent(state.entries, state.index);
-    const originalOrder = turningOff ? undefined : state.entries.map((e) => e.uid);
-    const index = entries.findIndex((e) => e.uid === current.uid);
-    set({ entries, index, shuffle: !state.shuffle, originalOrder });
-    await replaceQueue(entries, index, { keepCurrent: true, play: state.playing });
+    const added = makeEntries(picks, 'smart');
+    const next = withSmartPicks(state.entries, state.index, added, SMART_EVERY);
+    void rememberTracks(picks).catch(() => undefined);
+    set({ entries: next, smartShuffle: true });
+    await replaceQueue(next, state.index, { keepCurrent: true, play: state.playing });
     afterQueueChange();
+    return { mode: 'smart' as const };
   });
 }
 
@@ -524,6 +594,7 @@ async function restoreSnapshot() {
     positionAt: Date.now(),
     repeat: snapshot.repeat,
     shuffle: snapshot.shuffle,
+    smartShuffle: snapshot.smartShuffle ?? false,
     originalOrder: snapshot.originalOrder,
     context: snapshot.context
   });

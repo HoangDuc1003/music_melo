@@ -17,6 +17,8 @@ export interface PlayerStore {
   positionAt: number;
   repeat: RepeatMode;
   shuffle: boolean;
+  /** Trộn thông minh: có bài gợi ý (origin 'smart') chèn vào hàng chờ */
+  smartShuffle: boolean;
   /** thứ tự gốc (uid) trước khi trộn bài */
   originalOrder?: string[];
   context?: PlayContext;
@@ -38,6 +40,7 @@ export const initialPlayerState: PlayerStore = {
   positionAt: 0,
   repeat: 'off',
   shuffle: false,
+  smartShuffle: false,
   autoplay: true
 };
 

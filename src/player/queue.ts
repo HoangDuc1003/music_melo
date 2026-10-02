@@ -2,8 +2,11 @@
 import type { RepeatMode } from 'capacitor-melo-player';
 import type { Track } from '@/youtube/types';
 
-/** Nguồn gốc của một bài trong hàng chờ: từ album/playlist đang phát, do người dùng thêm, hay radio tự nối. */
-export type EntryOrigin = 'context' | 'queue' | 'radio';
+/**
+ * Nguồn gốc của một bài trong hàng chờ: từ album/playlist đang phát, do người dùng thêm, radio tự nối,
+ * hay bài gợi ý của Trộn thông minh (gỡ ra khi tắt trộn).
+ */
+export type EntryOrigin = 'context' | 'queue' | 'radio' | 'smart';
 
 export interface QueueEntry {
   /** khoá duy nhất (một bài có thể xuất hiện nhiều lần) */
@@ -90,6 +93,22 @@ export function indexAfterMove(index: number, from: number, to: number): number 
   return index;
 }
 
+/** Trộn thông minh: chèn một bài gợi ý sau mỗi `every` bài sắp phát (bài đã qua giữ nguyên). */
+export function withSmartPicks(entries: readonly QueueEntry[], index: number, picks: readonly QueueEntry[], every = 3): QueueEntry[] {
+  const out = entries.slice(0, index + 1);
+  let next = 0;
+  entries.slice(index + 1).forEach((entry, i) => {
+    out.push(entry);
+    if ((i + 1) % every === 0 && next < picks.length) out.push(picks[next++]);
+  });
+  return out;
+}
+
+/** Tắt Trộn thông minh: bỏ các bài gợi ý, trừ bài đang phát (`keepUid`). */
+export function withoutSmartPicks(entries: readonly QueueEntry[], keepUid?: string): QueueEntry[] {
+  return entries.filter((e) => e.origin !== 'smart' || e.uid === keepUid);
+}
+
 /** Tắt trộn bài: về thứ tự gốc; bài thêm vào mà thiếu trong thứ tự gốc thì giữ ở cuối. */
 export function unshuffle(entries: readonly QueueEntry[], originalOrder: readonly string[]): QueueEntry[] {
   const byUid = new Map(entries.map((e) => [e.uid, e]));
@@ -138,6 +157,8 @@ export interface QueueSnapshot {
   position: number;
   repeat: RepeatMode;
   shuffle: boolean;
+  /** Trộn thông minh (có bài gợi ý chèn vào) */
+  smartShuffle?: boolean;
   /** thứ tự gốc (uid) trước khi trộn bài */
   originalOrder?: string[];
   context?: PlayContext;
@@ -173,13 +194,15 @@ export function parseSnapshot(raw: string | null | undefined): QueueSnapshot | u
     const repeat: RepeatMode = value.repeat === 'all' || value.repeat === 'one' ? value.repeat : 'off';
     const uids = new Set(entries.map((e) => e.uid));
     const originalOrder = Array.isArray(value.originalOrder) ? value.originalOrder.filter((uid) => uids.has(uid)) : undefined;
+    const shuffle = Boolean(value.shuffle) && Boolean(originalOrder?.length);
     return {
       v: 1,
       entries,
       index,
       position: typeof value.position === 'number' && value.position > 0 ? value.position : 0,
       repeat,
-      shuffle: Boolean(value.shuffle) && Boolean(originalOrder?.length),
+      shuffle,
+      smartShuffle: shuffle && Boolean(value.smartShuffle),
       originalOrder: originalOrder?.length ? originalOrder : undefined,
       context: value.context,
       savedAt: typeof value.savedAt === 'number' ? value.savedAt : 0
