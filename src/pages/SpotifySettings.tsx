@@ -1,29 +1,14 @@
 // Mục "Spotify" trong Cài đặt: kết nối, đồng bộ, tự đồng bộ, nhập từ file dữ liệu Spotify.
-import { Browser } from '@capacitor/browser';
 import { Copy } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { ProgressBar } from '@/components/ProgressBar';
 import { SettingsRow, Toggle } from '@/components/SettingsRow';
-import { formatWhen } from '@/lib/format';
-import { isNative } from '@/lib/platform';
 import { getClientId, isValidClientId, redirectUri } from '@/sync/spotify-auth';
 import { connectSpotify, disconnectSpotify, importSpotifyExport, setSpotifyAutoSync, syncSpotify, useSpotify } from '@/sync/spotify-sync';
 import { copyText, runAction, toast } from '@/ui/overlays';
+import { openExternal, syncDetail } from './settings-shared';
 
 const GUIDE_URL = 'https://github.com/HoangDuc1003/spoti_music/blob/main/docs/SPOTIFY.md';
-
-function openExternal(url: string) {
-  if (isNative) void Browser.open({ url });
-  else window.open(url, '_blank', 'noopener');
-}
-
-/** Dòng phụ dưới "Đồng bộ ngay": tiến độ, kết quả lần trước. */
-function syncDetail(s: ReturnType<typeof useSpotify.getState>): string {
-  if (s.syncing) return `${s.phase ?? 'Đang đồng bộ…'}${s.total ? ` ${s.done}/${s.total}` : ''}`;
-  if (s.lastResult) return s.lastSyncAt ? `${s.lastResult} • ${formatWhen(s.lastSyncAt)}` : s.lastResult;
-  if (s.lastSyncAt) return `Lần cuối ${formatWhen(s.lastSyncAt)}`;
-  return 'Chưa đồng bộ lần nào';
-}
 
 /** Nhập Client ID của app Spotify tự tạo (lần đầu). */
 function ClientIdSetup({ onDone }: { onDone: () => void }) {

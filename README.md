@@ -42,6 +42,12 @@
 - **Thích một bài là tự tải về** (bật trong Cài đặt).
 - Nhạc lưu trong thư mục của app, **không đồng bộ lên iCloud**, và vẫn còn khi cài bản mới.
 
+### Đăng nhập Gmail: đồng bộ YouTube 🔑
+
+- **Đăng nhập bằng Gmail** chỉ bằng một mã ngắn, nhập ở google.com/device. Melo không thấy mật khẩu của bạn.
+- **Playlist** của bạn (cả playlist tạo trên YouTube Music) và **bài đã thích** hiện trong Thư viện với nhãn **Từ YouTube**. Phát và tải được ngay, tự đồng bộ khi mở app.
+- Melo chỉ **đọc** thư viện, không sửa gì trên YouTube. Hướng dẫn: [docs/GOOGLE.md](docs/GOOGLE.md).
+
 ### Đồng bộ Spotify 🔄
 
 - **Kết nối Spotify một lần**, có thể đăng nhập bằng Google trên trang của Spotify. Playlist của bạn và *Bài hát đã thích* hiện trong Thư viện với nhãn **Từ Spotify**.

@@ -13,8 +13,9 @@ import { navigate } from '@/ui/nav';
 import { confirmAction, copyText, openSleepTimer } from '@/ui/overlays';
 import { WebSources } from './WebSettings';
 
-// Phần Spotify nạp riêng (không làm nặng lúc mở app); bản web không có Spotify.
+// Phần đồng bộ tài khoản nạp riêng (không làm nặng lúc mở app); bản web không có YouTube/Spotify.
 const SpotifySection = __WEB_APP__ ? () => null : lazy(() => import('./SpotifySettings').then((m) => ({ default: m.SpotifySection })));
+const GoogleSection = __WEB_APP__ ? () => null : lazy(() => import('./GoogleSettings').then((m) => ({ default: m.GoogleSection })));
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -48,11 +49,18 @@ export function SettingsPage() {
           <WebSources />
         </Section>
       ) : (
-        <Section title="Spotify">
-          <Suspense fallback={<div className="h-[60px]" />}>
-            <SpotifySection />
-          </Suspense>
-        </Section>
+        <>
+          <Section title="YouTube (Gmail)">
+            <Suspense fallback={<div className="h-[60px]" />}>
+              <GoogleSection />
+            </Suspense>
+          </Section>
+          <Section title="Spotify">
+            <Suspense fallback={<div className="h-[60px]" />}>
+              <SpotifySection />
+            </Suspense>
+          </Section>
+        </>
       )}
 
       <Section title="Tải về">

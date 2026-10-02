@@ -5,9 +5,12 @@ import { ImportMusicRow } from '@/components/ImportMusicRow';
 import { Page, RootTitle } from '@/components/Page';
 import { PlaylistNameForm } from '@/components/PlaylistNameForm';
 import { Sheet } from '@/components/Sheet';
+import type { PlaylistRow } from '@/lib/db';
 import { createPlaylist, useLikedCount, usePlaylists } from '@/lib/library';
 import { navigate, type Route } from '@/ui/nav';
 import { runAction } from '@/ui/overlays';
+
+const SOURCE_LABEL: Record<PlaylistRow['source'], string> = { local: 'Playlist', spotify: 'Từ Spotify', youtube: 'Từ YouTube' };
 
 function Row({ icon, title, subtitle, route }: { icon: React.ReactNode; title: string; subtitle: string; route: Route }) {
   return (
@@ -98,7 +101,7 @@ export function LibraryPage() {
           key={p.id}
           route={{ name: 'localPlaylist', id: p.id! }}
           title={p.name}
-          subtitle={`${p.source === 'spotify' ? 'Từ Spotify' : 'Playlist'} • ${p.trackIds.length} bài`}
+          subtitle={`${SOURCE_LABEL[p.source]} • ${p.trackIds.length} bài`}
           icon={<Artwork src={p.cover} size={56} className="size-14 shrink-0" />}
         />
       ))}

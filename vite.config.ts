@@ -170,7 +170,7 @@ export default defineConfig(({ mode }) => ({
             { find: /^@\/youtube\/music$/, replacement: `${src}/youtube/mock/music.ts` },
             { find: /^@\/youtube\/stream$/, replacement: `${src}/youtube/mock/stream.ts` },
             { find: /^@\/youtube\/http$/, replacement: `${src}/youtube/mock/http.ts` },
-            { find: /^@\/sync\/spotify-(auth|api)$/, replacement: `${src}/sync/mock/spotify-$1.ts` }
+            { find: /^@\/sync\/(spotify-auth|spotify-api|google-auth|youtube-api)$/, replacement: `${src}/sync/mock/$1.ts` }
           ]
         : []),
       // `vite --mode web`: bản web (PWA) lấy nhạc từ Jamendo thay cho YouTube, xem src/web/.

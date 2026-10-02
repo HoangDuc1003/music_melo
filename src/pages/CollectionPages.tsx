@@ -95,7 +95,9 @@ export function LocalPlaylistPage({ id }: { id: number }) {
         subtitle={
           playlist.source === 'spotify'
             ? `Đồng bộ từ Spotify${playlist.unmatched ? ` • ${playlist.unmatched} bài chưa có trên YouTube Music` : ''}`
-            : 'Playlist của tôi'
+            : playlist.source === 'youtube'
+              ? 'Đồng bộ từ YouTube'
+              : 'Playlist của tôi'
         }
         tracks={tracks}
         context={{ type: 'playlist', id: `local-${id}`, title: playlist.name }}

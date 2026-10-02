@@ -26,8 +26,9 @@ if (__WEB_APP__) {
   void step('pwa', registerServiceWorker);
   void step('pwa', requestPersistentStorage);
 } else {
-  // Spotify nạp riêng (không làm nặng lúc mở app), đồng bộ sau khi phần phát/tải đã sẵn sàng.
+  // Đồng bộ tài khoản nạp riêng (không làm nặng lúc mở app), chạy sau khi phần phát/tải đã sẵn sàng.
   void ready.then(() => step('spotify', () => import('@/sync/spotify-sync').then((m) => m.initSpotify())));
+  void ready.then(() => step('youtube', () => import('@/sync/youtube-sync').then((m) => m.initYouTubeSync())));
 }
 
 const queryClient = new QueryClient({

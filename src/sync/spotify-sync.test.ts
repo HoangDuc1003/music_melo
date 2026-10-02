@@ -50,7 +50,7 @@ import {
   disconnectSpotify,
   importSpotifyExport,
   LIKED_NAME,
-  listSnapshot,
+  likedSnapshot,
   parseSpotifyExport,
   syncSpotify,
   useSpotify
@@ -119,9 +119,9 @@ describe('đồng bộ', () => {
   });
 
   it('Bài hát đã thích: snapshot theo danh sách id', () => {
-    expect(listSnapshot([t('a'), t('b')])).toBe(listSnapshot([t('a'), t('b')]));
-    expect(listSnapshot([t('a'), t('b')])).not.toBe(listSnapshot([t('b'), t('a')]));
-    expect(listSnapshot([t('ab')])).not.toBe(listSnapshot([t('a'), t('b')]));
+    expect(likedSnapshot([t('a'), t('b')])).toBe(likedSnapshot([t('a'), t('b')]));
+    expect(likedSnapshot([t('a'), t('b')])).not.toBe(likedSnapshot([t('b'), t('a')]));
+    expect(likedSnapshot([t('ab')])).not.toBe(likedSnapshot([t('a'), t('b')]));
   });
 
   it('bấm nhiều lần cùng lúc chỉ chạy một lượt', async () => {

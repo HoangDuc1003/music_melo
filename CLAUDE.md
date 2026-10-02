@@ -13,7 +13,9 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
   **SideStore** (free Apple ID, 7-day refresh).
 - Background playback must be **native** (Swift plugin owns the queue): iOS suspends WebView JS in background.
 - Gmail login is **optional**, only to import YouTube playlists/likes via OAuth **device flow**
-  (`youtube.readonly`, client type "TVs and Limited Input devices"). Secrets go to GitHub Secrets, never in code.
+  (`youtube.readonly`, client type "TVs and Limited Input devices"). Done (2026-10-02): the user pastes their own
+  Client ID + secret in Settings (secret in Keychain) — **not** baked into the build, because the release IPA is public.
+  Secrets never go in code.
 - Most reference apps are GPL: learn ideas only, never copy code.
 - `appId` `com.melo.music` must never change (downloads live in the app container).
 - **Web flavor (PWA, 2026-10-02, user-approved):** same React app built with `vite --mode web` for static hosting on
@@ -142,11 +144,21 @@ Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright 
 NOT verified on a real iPhone yet (no device here): background playback across tracks, lock screen, FileTransfer
 downloads, AVPlayer with googlevideo headers. First thing to do when the user reports back: read their in-app log.
 
+- **Gmail / YouTube sync** (user guide `docs/GOOGLE.md`, Settings section "YouTube (Gmail)" lazy `GoogleSettings.tsx`,
+  native only): `sync/google-auth.ts` device flow (`/device/code` → show `user_code` → poll `/token` every `interval`,
+  `slow_down` +5 s, `access_denied` / `expired_token` errors; scopes `openid email youtube.readonly`; email from the
+  id_token payload for display only), tokens + client secret in Keychain, client ID in `db.settings`, single-flight
+  refresh, `invalid_grant` → signed out, revoke on sign-out. `sync/youtube-api.ts` (Data API v3: `playlists?mine`,
+  `playlistItems` minus deleted/private, durations via `videos?id=` in batches of 50, liked = `videos?myRating=like`
+  filtered to categoryId 10; `quotaExceeded` / `accessNotConfigured` → Vietnamese errors). `sync/youtube-sync.ts`
+  (rows `source: 'youtube'`, `ytId`, snapshot = playlist etag / hash of liked ids; auto-sync > 12 h; single-flight;
+  generation counter cancels on sign-out). Shared with Spotify: `sync/remote-playlists.ts` (`remotePlaylistsById`,
+  `writeRemotePlaylists`, `removeMissingPlaylists`, `listSnapshot`) and `pages/settings-shared.ts`. Mocks
+  `src/sync/mock/{google-auth,youtube-api}.ts` (dev:mock shows code MELO-2026, signs in after 2 s).
+
 TODO (next sessions):
 1. User test on iPhone with the checklist in docs/PLAN.md §5; fix from the in-app log.
-2. Device-flow login + YouTube Data API import (playlists, likes); store tokens with `src/lib/secure.ts` (Keychain),
-   never log them (`redact` already masks `access_token`/`refresh_token`). OAuth client id/secret from GitHub Secrets
-   at build time (`.env` is git-ignored). Spotify sync is done (above) and can serve as the template.
+2. First real-device Google test: user creates the OAuth client per docs/GOOGLE.md; check device flow + sync.
 3. First real-device Spotify test: user creates the Spotify app per docs/SPOTIFY.md; check redirect + Keychain + sync.
 4. Optional: swipe between tabs, haptics, Keyboard plugin (`@capacitor/keyboard`) if the search keyboard misbehaves.
 

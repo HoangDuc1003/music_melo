@@ -6,7 +6,7 @@
 import { App } from '@capacitor/app';
 import { create } from 'zustand';
 import { Semaphore } from '@/lib/async';
-import { db, getSetting, setSetting, type PlaylistRow } from '@/lib/db';
+import { getSetting, setSetting, type PlaylistRow } from '@/lib/db';
 import { errorMessage, log } from '@/lib/log';
 import { isOnline } from '@/lib/network';
 import { isNative } from '@/lib/platform';
@@ -21,6 +21,7 @@ import {
   startSpotifyLogin
 } from '@/sync/spotify-auth';
 import { matchTracks } from './match';
+import { listSnapshot, remotePlaylistsById, removeMissingPlaylists, writeRemotePlaylists, type RemotePlaylist } from './remote-playlists';
 
 const LIKED_ID = 'liked';
 export const LIKED_NAME = 'Bài hát đã thích trên Spotify';
@@ -63,24 +64,11 @@ interface SourceList {
 }
 
 /** "Snapshot" cho Bài hát đã thích (Spotify không có snapshot_id cho danh sách này): băm danh sách id. */
-export function listSnapshot(tracks: SourceTrack[]): string {
-  let h = 0x811c9dc5;
-  for (const t of tracks) {
-    for (let i = 0; i < t.key.length; i++) h = Math.imul(h ^ t.key.charCodeAt(i), 0x01000193) >>> 0;
-    h = Math.imul(h ^ 0x2c, 0x01000193) >>> 0;
-  }
-  return `${tracks.length}:${h.toString(16)}`;
-}
-
-async function spotifyPlaylistsById(): Promise<Map<string, PlaylistRow>> {
-  const rows = await db.playlists.filter((p) => p.source === 'spotify').toArray();
-  return new Map(rows.map((p) => [p.spotifyId!, p]));
-}
+export const likedSnapshot = (tracks: readonly SourceTrack[]) => listSnapshot(tracks.map((t) => t.key));
 
 const isFromExportFile = (p: PlaylistRow) => Boolean(p.spotifyId?.startsWith(EXPORT_PREFIX));
 /** Cùng snapshot và đủ bài: không cần đọc lại danh sách bài (bài thiếu thì đọc lại để tìm lại). */
 const isUnchanged = (local: PlaylistRow | undefined, snapshotId: string) => local?.snapshotId === snapshotId && !local.unmatched;
-const sameIds = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((id, i) => id === b[i]);
 
 interface WriteResult {
   matched: number;
@@ -90,29 +78,21 @@ interface WriteResult {
 /** Ghi các danh sách đã ghép thành playlist Melo. */
 async function writePlaylists(lists: SourceList[], matches: Map<string, string>, existing: Map<string, PlaylistRow>): Promise<WriteResult> {
   const result: WriteResult = { matched: 0, missing: 0 };
-  await db.transaction('rw', db.playlists, async () => {
-    const now = Date.now();
-    for (const list of lists) {
+  const remote = lists.map((list): RemotePlaylist => {
+    const base = { remoteId: list.spotifyId, name: list.name, snapshotId: list.snapshotId, image: list.image };
+    if (!list.tracks) {
       const local = existing.get(list.spotifyId);
-      const name = list.name.slice(0, 100);
-      const cover = list.image ?? local?.cover;
-      if (!list.tracks) {
-        if (!local) continue;
-        result.matched += local.trackIds.length;
-        result.missing += local.unmatched ?? 0;
-        if (local.name !== name || local.cover !== cover) await db.playlists.update(local.id!, { name, cover });
-        continue;
-      }
-      const trackIds = [...new Set(list.tracks.map((t) => matches.get(t.key)).filter((id): id is string => Boolean(id)))];
-      const unmatched = list.tracks.filter((t) => !matches.has(t.key)).length;
-      result.matched += trackIds.length;
-      result.missing += unmatched;
-      const fields = { name, cover, trackIds, snapshotId: list.snapshotId, unmatched };
-      if (!local) await db.playlists.add({ ...fields, source: 'spotify', spotifyId: list.spotifyId, createdAt: now, updatedAt: now });
-      // Danh sách bài không đổi thì giữ `updatedAt` (thứ tự trong Thư viện không bị xáo).
-      else await db.playlists.update(local.id!, sameIds(local.trackIds, trackIds) ? fields : { ...fields, updatedAt: now });
+      result.matched += local?.trackIds.length ?? 0;
+      result.missing += local?.unmatched ?? 0;
+      return base;
     }
+    const trackIds = [...new Set(list.tracks.map((t) => matches.get(t.key)).filter((id): id is string => Boolean(id)))];
+    const unmatched = list.tracks.filter((t) => !matches.has(t.key)).length;
+    result.matched += trackIds.length;
+    result.missing += unmatched;
+    return { ...base, trackIds, unmatched };
   });
+  await writeRemotePlaylists('spotify', remote, existing);
   return result;
 }
 
@@ -124,12 +104,12 @@ async function readLists(existing: Map<string, PlaylistRow>): Promise<{ lists: S
   // Development Mode chỉ đọc được bài trong playlist mình sở hữu hoặc cùng chỉnh sửa.
   const readable = all.filter((p) => p.ownerId === me.id || p.collaborative);
 
-  const likedSnapshot = listSnapshot(liked);
+  const likedVersion = likedSnapshot(liked);
   const likedList: SourceList = {
     spotifyId: LIKED_ID,
     name: LIKED_NAME,
-    snapshotId: likedSnapshot,
-    tracks: isUnchanged(existing.get(LIKED_ID), likedSnapshot) ? undefined : liked
+    snapshotId: likedVersion,
+    tracks: isUnchanged(existing.get(LIKED_ID), likedVersion) ? undefined : liked
   };
 
   const changed = readable.filter((p) => !isUnchanged(existing.get(p.id), p.snapshotId));
@@ -194,14 +174,12 @@ async function runSync(): Promise<void> {
   const gen = generation;
   const cancelled = () => gen !== generation;
   try {
-    const existing = await spotifyPlaylistsById();
+    const existing = await remotePlaylistsById('spotify');
     const { lists, skipped } = await readLists(existing);
     if (cancelled()) return;
     const written = await matchAndWrite(lists, existing, cancelled);
     // Playlist đã xoá / bỏ theo dõi trên Spotify thì xoá theo (không đụng playlist nhập từ file).
-    const keep = new Set(lists.map((l) => l.spotifyId));
-    const removed = [...existing.values()].filter((p) => !isFromExportFile(p) && !keep.has(p.spotifyId!));
-    await db.playlists.bulkDelete(removed.map((p) => p.id!));
+    await removeMissingPlaylists(existing, new Set(lists.map((l) => l.spotifyId)), isFromExportFile);
     const now = Date.now();
     await setSetting(LAST_SYNC_SETTING, now);
     const result = summary({ ...written, lists: lists.length, skipped });
@@ -247,8 +225,7 @@ export async function disconnectSpotify(removePlaylists = false): Promise<void> 
   generation += 1;
   await disconnectSpotifyAuth();
   if (removePlaylists) {
-    const synced = [...(await spotifyPlaylistsById()).values()].filter((p) => !isFromExportFile(p));
-    await db.playlists.bulkDelete(synced.map((p) => p.id!));
+    await removeMissingPlaylists(await remotePlaylistsById('spotify'), new Set(), isFromExportFile);
   }
   await setSetting(USER_SETTING, '');
   await setSetting(LAST_SYNC_SETTING, 0);
@@ -313,7 +290,7 @@ export async function importSpotifyExport(files: { name: string; text(): Promise
     }
   }
   if (!lists.length) throw new Error('Không thấy playlist hay bài hát nào. Hãy chọn file Playlist1.json hoặc YourLibrary.json');
-  const written = await withProgress('Đang tìm bài trên YouTube Music…', async () => matchAndWrite(lists, await spotifyPlaylistsById()));
+  const written = await withProgress('Đang tìm bài trên YouTube Music…', async () => matchAndWrite(lists, await remotePlaylistsById('spotify')));
   return `Đã nhập ${summary({ ...written, lists: lists.length })}${written.pending ? ' (nhập lại file để tìm tiếp)' : ''}`;
 }
 

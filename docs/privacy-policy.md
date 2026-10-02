@@ -29,7 +29,7 @@ Melo không dùng công cụ phân tích, quảng cáo hay theo dõi nào, và k
 
 ## Đăng nhập (nếu có)
 
-Nếu bạn chọn kết nối tài khoản Google để nhập playlist:
+Nếu bạn chọn đăng nhập Google (Gmail) để đồng bộ playlist YouTube:
 
 * App chỉ xin quyền **chỉ đọc** (`youtube.readonly`).
 * Mã đăng nhập được lưu trong Keychain của iPhone, không gửi đi đâu khác.
