@@ -53,6 +53,16 @@ describe('tải file trên iPhone', () => {
     ]);
   });
 
+  it('link lấy từ bộ nhớ đã hết lượt (bị từ chối ngay byte đầu): đổi link một lần rồi tải từ đầu', async () => {
+    native.downloadFile.mockRejectedValueOnce(expired(0)).mockResolvedValueOnce({ bytes: 3_000_000 });
+    const refreshUrl = vi.fn(async () => ({ url: 'https://rr1.googlevideo.com/videoplayback?v=2' }));
+    await getStorage().saveAudio({ id: 'abcdefghijk', url: 'https://rr1.googlevideo.com/videoplayback?v=1', onProgress: () => undefined, refreshUrl });
+    expect(native.downloadFile.mock.calls.map(([o]) => [o.url, o.offset])).toEqual([
+      ['https://rr1.googlevideo.com/videoplayback?v=1', 0],
+      ['https://rr1.googlevideo.com/videoplayback?v=2', 0]
+    ]);
+  });
+
   it('link mới bị từ chối ngay (chưa tải thêm byte nào) thì báo lỗi, không đổi link mãi', async () => {
     native.downloadFile.mockRejectedValueOnce(expired(1_048_576)).mockRejectedValueOnce(expired(1_048_576));
     const refreshUrl = vi.fn(async () => ({ url: 'https://rr1.googlevideo.com/videoplayback?v=2' }));

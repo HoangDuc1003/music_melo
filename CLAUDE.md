@@ -31,7 +31,7 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
   not) is **public**: never commit secrets.
 
 ## Status (2026-10-02, session 2 — 10 closed loops + Spotify sync + refactor pass, CI green each round)
-Done and verified (218 vitest incl. `scripts/*.test.mjs`, 20 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
+Done and verified (219 vitest incl. `scripts/*.test.mjs`, 20 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
 - **Swift plugin** `plugins/player/` (package `CapacitorMeloPlayer`):
   - `ios/Sources/MeloPlayerCore/` — pure Swift: `PlayerQueue`, `QueueItem`/`PlaybackSource` (file first, remote
     **https only**), `artworkURL` (https/file only), `RetryPolicy` (needsUrl once → error+skip; stop after skipping the
@@ -254,10 +254,14 @@ TODO (next sessions):
   3. `MeloStreamLoader`: 403/410 after this URL served bytes → park the requests, re-POST the recipe
      (`StreamRefresh+Fetch.swift`), resume at the same byte (log "Đã có link mới (lần N, tự lấy|JS)"); recipe missing or
      failed once → `onExpired` → JS `needsUrl` reason `failed` → `sendUrl(refresh)` → `updateItem` → `offerRemote`.
-     A new URL refused before serving a byte → item error (so a per-IP/per-video budget would show up as errors).
+     The first rotation is also allowed when nothing was served yet (a cached URL may be used up by an earlier play
+     or by playback before a download); a rotated URL refused before serving a byte → item error.
+     Measured rule (user's 0.2.30 log): the budget is **cumulative per URL** (~1 MiB served, then new requests 403;
+     the request in flight is not cut), not a byte position: the 256-byte probe at 1 MiB passes as a first request, and
+     a fresh URL after a retry served 81920–1130495 before its 403.
      ≤ 40 rotations. `MeloDownloader` does the same inside `downloadFile` (returns `rotations`); if it can't, it rejects
      with `data.bytes` and `NativeStorage.saveAudio` gets a new link via `refreshUrl()` and resumes from `offset`
-     (≤ 20 JS rotations; tested in `src/downloads/storage.test.ts`).
+     (≤ 20 JS rotations, first one even at 0 bytes; tested in `src/downloads/storage.test.ts`).
   **Next step: ask the user for the in-app log** — check `via <client>`, "xin link mới", "(tự lấy)" vs "(JS)",
   and whether a song plays to the end with the screen off.
 

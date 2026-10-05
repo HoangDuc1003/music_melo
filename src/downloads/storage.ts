@@ -134,7 +134,10 @@ class NativeStorage implements DownloadStorage {
         } catch (err) {
           const data = (err as { data?: { httpStatus?: number; bytes?: number } }).data;
           const have = Number(data?.bytes ?? 0);
-          if (!refreshUrl || data?.httpStatus !== 403 || have <= offset || rotation >= MAX_URL_ROTATIONS) throw err;
+          // Đổi link khi link đã cho thêm dữ liệu; lần đầu thì đổi cả khi chưa được byte nào (link lấy từ bộ nhớ có thể
+          // đã hết lượt lúc phát bài này). Link mới bị từ chối ngay thì thôi.
+          const progressed = have > offset || rotation === 0;
+          if (!refreshUrl || data?.httpStatus !== 403 || !progressed || rotation >= MAX_URL_ROTATIONS) throw err;
           log.info('download', `${id}: link hết lượt ở byte ${have}, lấy link mới (lần ${rotation + 1})`);
           offset = have;
           link = await refreshUrl();

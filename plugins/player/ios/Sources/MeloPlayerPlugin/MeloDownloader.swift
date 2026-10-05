@@ -68,7 +68,9 @@ final class MeloDownloader {
             let response: HTTPURLResponse
             do {
                 (data, response) = try await fetch(url: link, headers: headers, range: "bytes=\(offset)-\(last)", have: offset)
-            } catch let error as HTTPError where (error.status == 403 || error.status == 410) && offset > linkStart && rotations < Self.maxRotations {
+            } catch let error as HTTPError where (error.status == 403 || error.status == 410)
+                && (offset > linkStart || rotations == 0) && rotations < Self.maxRotations {
+                // Đổi link khi link đã cho dữ liệu, hoặc một lần ngay từ đầu (link vừa dùng để phát có thể đã hết lượt).
                 guard let refresh, let fresh = try? await refresh.fetchStreamURL(session: session) else { throw error }
                 link = fresh
                 linkStart = offset

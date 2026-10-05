@@ -39,7 +39,9 @@ final class MeloStreamLoader: NSObject, AVAssetResourceLoaderDelegate {
     private var awaitingURL = false
     private var parked: [Job] = []
     private var rotations = 0
-    /// Số byte link hiện tại đã trả (link mới bị từ chối ngay thì không đổi tiếp nữa).
+    /// Số byte link hiện tại đã trả (link mới bị từ chối ngay thì không đổi tiếp nữa). Đo trên iPhone: YouTube từ chối
+    /// yêu cầu mới khi link đã trả ~1 MiB (tính cộng dồn, không theo vị trí byte: đoạn 256 byte ở mốc 1 MiB vẫn qua nếu
+    /// là yêu cầu đầu tiên); link mới lấy lại được thêm ~1 MiB.
     private var servedSinceRotation: Int64 = 0
 
     /// Một yêu cầu dữ liệu của AVPlayer, tải dần từng đoạn.
@@ -153,8 +155,11 @@ final class MeloStreamLoader: NSObject, AVAssetResourceLoaderDelegate {
             return fail(job, Self.error(-1, "Phản hồi không phải HTTP"), detail: "phản hồi không phải HTTP")
         }
         guard http.statusCode == 206 || http.statusCode == 200 else {
+            // Đổi link khi link này đã cho dữ liệu, hoặc ngay từ đầu nếu chưa đổi lần nào (link lấy từ bộ nhớ có thể đã
+            // hết lượt ở lần phát trước). Link mới bị từ chối ngay thì báo lỗi, không đổi mãi.
             let expired = http.statusCode == 403 || http.statusCode == 410
-            if expired, servedSinceRotation > 0, rotations < Self.maxRotations, refresh != nil || onExpired != nil {
+            let worthRetry = servedSinceRotation > 0 || rotations == 0
+            if expired, worthRetry, rotations < Self.maxRotations, refresh != nil || onExpired != nil {
                 return park(job, status: http.statusCode)
             }
             return fail(job, Self.error(http.statusCode, "YouTube trả mã HTTP \(http.statusCode)"), detail: "HTTP \(http.statusCode) ở byte \(job.offset)")
