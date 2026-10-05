@@ -111,8 +111,12 @@ final class MeloAudioEngine: NSObject {
         updateNowPlaying()
     }
 
-    func updateItem(id: String, url: String?, fileUrl: String?, headers: [String: String]?) {
-        let affectsCurrent = queue.update(id: id, url: url, fileUrl: fileUrl, headers: headers)
+    func updateItem(id: String, url: String?, fileUrl: String?, headers: [String: String]?, refresh: StreamRefresh?) {
+        let affectsCurrent = queue.update(id: id, url: url, fileUrl: fileUrl, headers: headers, refresh: refresh)
+        // Bài đang phát bằng link: link mới dùng cho các đoạn sau (loader đang đợi thì tải tiếp ngay).
+        if affectsCurrent, !waitingForUrl, let url, let remote = URL(string: url), remote.scheme == "https" {
+            streamLoader?.offerRemote(remote, refresh: refresh)
+        }
         guard affectsCurrent, waitingForUrl, let item = queue.current, source(for: item) != nil else { return }
         load(queue.index, position: resumeAt, play: playWhenReady)
     }
@@ -239,8 +243,14 @@ final class MeloAudioEngine: NSObject {
         case .remote(let url, let headers):
             currentSourceIsFile = false
             // Tải qua URLSession của app (xem MeloStreamLoader): AVPlayer mở thẳng link YouTube thì bị từ chối.
-            let loader = MeloStreamLoader(remote: url, headers: headers) { [weak self] message in
+            let loader = MeloStreamLoader(remote: url, headers: headers, refresh: item.refresh) { [weak self] message in
                 DispatchQueue.main.async { self?.log(message) }
+            }
+            // Link hết lượt giữa chừng mà native không tự xin được link mới: nhờ JS (needsUrl "failed" → updateItem →
+            // offerRemote), không dừng bài.
+            loader.onExpired = { [weak self, weak loader] in
+                guard let self, let loader, self.streamLoader === loader, let current = self.queue.current else { return }
+                self.emit?("needsUrl", ["index": self.queue.index, "id": current.id, "reason": "failed"])
             }
             if let streamURL = loader.assetURL {
                 let streamAsset = AVURLAsset(url: streamURL)

@@ -31,7 +31,7 @@ The user speaks **Vietnamese** — reply in Vietnamese; all UI strings are Vietn
   not) is **public**: never commit secrets.
 
 ## Status (2026-10-02, session 2 — 10 closed loops + Spotify sync + refactor pass, CI green each round)
-Done and verified (140 vitest incl. `scripts/*.test.mjs`, 15 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
+Done and verified (218 vitest incl. `scripts/*.test.mjs`, 20 XCTest, Playwright screenshot runs at 390×844 in `dev:mock`, CI on `macos-26`):
 - **Swift plugin** `plugins/player/` (package `CapacitorMeloPlayer`):
   - `ios/Sources/MeloPlayerCore/` — pure Swift: `PlayerQueue`, `QueueItem`/`PlaybackSource` (file first, remote
     **https only**), `artworkURL` (https/file only), `RetryPolicy` (needsUrl once → error+skip; stop after skipping the
@@ -238,7 +238,28 @@ TODO (next sessions):
   retried ×2 per chunk, 403/429 rejected as `HTTP <code>` + `data.httpStatus` so `classifyFailure` sees "blocked"),
   `downloadProgress` events ≤ 4/s; destination must be inside the app's Library folder, URL https. `NativeStorage`
   uses it (FileTransfer only for artwork); `withRange` moved into `WebStorage` (fetch path only).
-  **Next step: ask the user for the in-app log / whether downloads finish after installing this build.**
+- Build 0.2.29 screenshot: **playback stops at ~1:02** (spinner). Cause: an IOS-client URL (no PO token) serves only
+  ~1 MiB in total (≈ 62 s at 128 kbps); the 256-byte probe after 1 MB still passes, so the probe can't catch it.
+  Fix (unverified until the next log), three layers:
+  1. `stream.ts`: `ClientSpec.full` (VISIONOS, TV_SIMPLY, MWEB, YTMUSIC); only full clients are saved as preferred, so
+     TV_SIMPLY + PO token is tried before IOS again; `LOGIN_REQUIRED` → that client skipped 30 min, PO-token failure
+     → all PO clients skipped 30 min (in memory, skipped clients ordered last, not removed); `getPoTokens` 12 s timeout.
+  2. Native self-refresh (works while JS is suspended with the screen off): `player-requests.ts`
+     `recordPlayerRequests(appFetch)` (the fetch given to youtubei.js) remembers the last `/youtubei/v1/player` request
+     per `videoId|clientName` (cookie/authorization dropped, memory only, never logged); `tryClient` attaches
+     `refresh = {url, headers, body, itag}` to `ResolvedAudio` for non-full, non-PO clients whose format has a plain
+     `url` without `n`/cipher. It travels in `PlayerItem.refresh` / `updateItem({refresh})` / `downloadFile({refresh})`
+     → Swift `StreamRefresh` (Core, XCTest; only InnerTube hosts + `/youtubei/v1/player`; response must be
+     `playabilityStatus OK`, same itag, https `*.googlevideo.com`, no `n`). `QueueItem.update(url:)` replaces it.
+  3. `MeloStreamLoader`: 403/410 after this URL served bytes → park the requests, re-POST the recipe
+     (`StreamRefresh+Fetch.swift`), resume at the same byte (log "Đã có link mới (lần N, tự lấy|JS)"); recipe missing or
+     failed once → `onExpired` → JS `needsUrl` reason `failed` → `sendUrl(refresh)` → `updateItem` → `offerRemote`.
+     A new URL refused before serving a byte → item error (so a per-IP/per-video budget would show up as errors).
+     ≤ 40 rotations. `MeloDownloader` does the same inside `downloadFile` (returns `rotations`); if it can't, it rejects
+     with `data.bytes` and `NativeStorage.saveAudio` gets a new link via `refreshUrl()` and resumes from `offset`
+     (≤ 20 JS rotations; tested in `src/downloads/storage.test.ts`).
+  **Next step: ask the user for the in-app log** — check `via <client>`, "xin link mới", "(tự lấy)" vs "(JS)",
+  and whether a song plays to the end with the screen off.
 
 ## Verified YouTube facts (from this PC's VN residential IP, 2026-10-01 — re-run `scripts/probe*.mjs` if broken)
 - Full-file download works **without PO token only with `VISIONOS`**. `IOS`, `ANDROID_VR`, `MWEB`, `YTMUSIC`,

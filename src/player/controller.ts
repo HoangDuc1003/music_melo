@@ -112,6 +112,7 @@ async function toItem(track: Track): Promise<PlayerItem> {
     url: cached?.url ?? '',
     fileUrl,
     headers: cached?.headers,
+    refresh: cached?.refresh,
     title: track.title,
     artist: joinArtists(track.artists),
     album: track.album?.name,
@@ -131,7 +132,7 @@ async function sendUrl(trackId: string, options: { refresh?: boolean; force?: bo
   const audio = await resolveAudio(trackId, { refresh: options.refresh });
   if (!options.force && sentUrls.get(trackId) === audio.url) return;
   sentUrls.set(trackId, audio.url);
-  await MeloPlayer.updateItem({ id: trackId, url: audio.url, headers: audio.headers });
+  await MeloPlayer.updateItem({ id: trackId, url: audio.url, headers: audio.headers, refresh: audio.refresh });
 }
 
 /** Chuẩn bị link cho bài hiện tại và PRERESOLVE_AHEAD bài sau. Lần gọi mới huỷ vòng cũ. */

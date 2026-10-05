@@ -9,6 +9,7 @@ import type { Innertube } from 'youtubei.js/web';
 import { memoAsync } from '@/lib/async';
 import { log } from '@/lib/log';
 import { appFetch } from './http';
+import { recordPlayerRequests } from './player-requests';
 
 type YouTubeJs = typeof import('youtubei.js/web');
 
@@ -16,7 +17,7 @@ const loadLibrary = memoAsync(async () => {
   const yt: YouTubeJs = await import('youtubei.js/web');
   // youtubei.js không kèm bộ chạy JS để giải mã link; WebView có sẵn nên dùng new Function.
   yt.Platform.shim.eval = async (data) => new Function(data.output)();
-  return { yt, options: { lang: 'vi', location: 'VN', fetch: appFetch, cache: new yt.UniversalCache(true) } };
+  return { yt, options: { lang: 'vi', location: 'VN', fetch: recordPlayerRequests(appFetch), cache: new yt.UniversalCache(true) } };
 });
 
 /** Bắt đầu nạp youtubei.js sớm (gọi sau khi giao diện đã hiện). */

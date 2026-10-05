@@ -136,7 +136,9 @@ async function downloadAudio(id: string): Promise<{ bytes: number; mimeType?: st
         url: audio.url,
         headers: audio.headers,
         expectedBytes: audio.contentLength,
-        onProgress: (p) => setProgress(id, { bytes: p.bytes, total: p.total || audio.contentLength || 0 })
+        onProgress: (p) => setProgress(id, { bytes: p.bytes, total: p.total || audio.contentLength || 0 }),
+        refresh: audio.refresh,
+        refreshUrl: () => resolveGate.run(() => resolveAudio(id, { refresh: true, download: true }))
       });
       return { bytes, mimeType: audio.mimeType };
     } catch (err) {

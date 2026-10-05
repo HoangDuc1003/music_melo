@@ -1,5 +1,6 @@
 // Kiểu dữ liệu gọn của app, tách khỏi cấu trúc phức tạp của youtubei.js
 // (khi YouTube đổi, chỉ cần sửa normalize.ts).
+import type { StreamRefresh } from 'capacitor-melo-player';
 
 export interface ArtistRef {
   id?: string;
@@ -100,4 +101,6 @@ export interface ResolvedAudio {
   bitrate?: number;
   client: string;
   headers?: Record<string, string>;
+  /** iPhone: cách native tự xin link mới khi link (không PO token, ~1 MiB) hết lượt giữa bài. */
+  refresh?: StreamRefresh;
 }

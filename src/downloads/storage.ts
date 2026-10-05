@@ -5,7 +5,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { FileTransfer } from '@capacitor/file-transfer';
-import { MeloPlayer } from 'capacitor-melo-player';
+import { MeloPlayer, type StreamRefresh } from 'capacitor-melo-player';
 import { memoAsync } from '@/lib/async';
 import { db } from '@/lib/db';
 import { log } from '@/lib/log';
@@ -25,7 +25,14 @@ export interface DownloadRequest {
   /** byte, nếu biết trước (để kiểm tra file tải trọn) */
   expectedBytes?: number;
   onProgress: (p: DownloadProgress) => void;
+  /** iPhone: cách native tự xin link mới khi link hết lượt giữa chừng (YouTube: link không PO token chỉ cho ~1 MiB). */
+  refresh?: StreamRefresh;
+  /** Link mới (lấy bằng JS) khi native không tự đổi được link. */
+  refreshUrl?: () => Promise<Pick<DownloadRequest, 'url' | 'refresh'>>;
 }
+
+/** Số lần đổi link tối đa cho một bài (mỗi link ~1 MiB → đủ cho bài ~20 phút). */
+const MAX_URL_ROTATIONS = 20;
 
 export interface SidecarInfo {
   track: Track;
@@ -108,15 +115,31 @@ class NativeStorage implements DownloadStorage {
     }
   }
 
-  async saveAudio({ id, url, headers, expectedBytes, onProgress }: DownloadRequest): Promise<number> {
+  async saveAudio({ id, url, headers, expectedBytes, onProgress, refresh, refreshUrl }: DownloadRequest): Promise<number> {
     assertSafeId(id);
     await this.listen();
     const base = await this.folderUri();
     const part = `${FOLDER}/${id}.m4a.part`;
     this.progressHandlers.set(id, onProgress);
     try {
-      // Plugin tải từng đoạn ≤ 1 MiB bằng URLSession (link YouTube client IOS bị 403 nếu xin cả file một lần).
-      await MeloPlayer.downloadFile({ id, url, path: `${base}/${id}.m4a.part`, headers });
+      // Plugin tải từng đoạn ≤ 1 MiB bằng URLSession và tự đổi link hết lượt nếu có `refresh`. Không tự đổi được
+      // (403 sau khi đã tải được một phần): lấy link mới bằng JS rồi tải tiếp từ chỗ dừng.
+      let link: Pick<DownloadRequest, 'url' | 'refresh'> = { url, refresh };
+      let offset = 0;
+      for (let rotation = 0; ; rotation++) {
+        try {
+          const result = await MeloPlayer.downloadFile({ id, url: link.url, path: `${base}/${id}.m4a.part`, headers, offset, refresh: link.refresh });
+          if (result.rotations) log.info('download', `${id}: tự đổi link ${result.rotations} lần`);
+          break;
+        } catch (err) {
+          const data = (err as { data?: { httpStatus?: number; bytes?: number } }).data;
+          const have = Number(data?.bytes ?? 0);
+          if (!refreshUrl || data?.httpStatus !== 403 || have <= offset || rotation >= MAX_URL_ROTATIONS) throw err;
+          log.info('download', `${id}: link hết lượt ở byte ${have}, lấy link mới (lần ${rotation + 1})`);
+          offset = have;
+          link = await refreshUrl();
+        }
+      }
     } finally {
       this.progressHandlers.delete(id);
     }

@@ -12,6 +12,8 @@ export interface PlayerItem {
   fileUrl?: string;
   /** Header gửi kèm khi tải link https (ví dụ User-Agent). */
   headers?: Record<string, string>;
+  /** Cách native tự xin link mới khi `url` hết lượt (chỉ có với link bị giới hạn ~1 MiB). */
+  refresh?: StreamRefresh;
   title: string;
   artist: string;
   album?: string;
@@ -19,6 +21,17 @@ export interface PlayerItem {
   artwork?: string;
   /** giây */
   duration?: number;
+}
+
+/**
+ * Yêu cầu `/player` (InnerTube) mà native gửi lại để lấy link mới của định dạng cùng `itag`, khi link không PO token
+ * hết ~1 MiB giữa bài (kể cả lúc tắt màn hình, khi iOS tạm dừng JS). Native chỉ gửi tới máy chủ InnerTube.
+ */
+export interface StreamRefresh {
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+  itag: number;
 }
 
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -75,7 +88,7 @@ export interface MeloPlayerPlugin {
   removeItem(options: { index: number }): Promise<void>;
   moveItem(options: { from: number; to: number }): Promise<void>;
   /** Cập nhật link/file cho mọi mục có cùng id. */
-  updateItem(options: { id: string; url?: string; fileUrl?: string; headers?: Record<string, string> }): Promise<void>;
+  updateItem(options: { id: string; url?: string; fileUrl?: string; headers?: Record<string, string>; refresh?: StreamRefresh }): Promise<void>;
   play(): Promise<void>;
   pause(): Promise<void>;
   seekTo(options: { position: number }): Promise<void>;
@@ -93,10 +106,19 @@ export interface MeloPlayerPlugin {
   keychainRemove(options: { key: string }): Promise<void>;
 
   /**
-   * iPhone: tải file nhạc về `path` (file:// trong thư mục Library của app) theo từng đoạn Range ≤ 1 MiB.
-   * Link YouTube client IOS bị 403 nếu xin cả file một lần. Lỗi HTTP: `message` "HTTP <mã>", `data.httpStatus`.
+   * iPhone: tải file nhạc về `path` (file:// trong thư mục Library của app) theo từng đoạn Range ≤ 1 MiB, bắt đầu từ
+   * byte `offset` (mặc định 0 = tải lại từ đầu; > 0 = tải tiếp bằng link mới). Có `refresh` thì link hết lượt giữa
+   * chừng được native tự đổi (`rotations` = số lần đổi). Lỗi HTTP: `message` "HTTP <mã>", `data.httpStatus`,
+   * `data.bytes` = số byte đã có trong file.
    */
-  downloadFile(options: { id: string; url: string; path: string; headers?: Record<string, string> }): Promise<{ bytes: number }>;
+  downloadFile(options: {
+    id: string;
+    url: string;
+    path: string;
+    headers?: Record<string, string>;
+    offset?: number;
+    refresh?: StreamRefresh;
+  }): Promise<{ bytes: number; rotations?: number }>;
 
   addListener(eventName: 'state', listener: (state: PlayerState) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'itemChanged', listener: (event: ItemChangedEvent) => void): Promise<PluginListenerHandle>;

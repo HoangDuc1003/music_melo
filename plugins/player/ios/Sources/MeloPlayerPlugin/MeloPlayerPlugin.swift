@@ -95,7 +95,8 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         let url = call.getString("url")
         let fileUrl = call.getString("fileUrl")
         let headers = call.getObject("headers").map { $0.compactMapValues { $0 as? String } }
-        run(call) { $0.updateItem(id: id, url: url, fileUrl: fileUrl, headers: headers) }
+        let refresh = StreamRefresh(dictionary: call.getObject("refresh"))
+        run(call) { $0.updateItem(id: id, url: url, fileUrl: fileUrl, headers: headers, refresh: refresh) }
     }
 
     @objc func play(_ call: CAPPluginCall) {
@@ -173,6 +174,7 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
     }
 
     /// Tải file nhạc theo từng đoạn (xem MeloDownloader). Chỉ ghi vào thư mục của app; link phải là https.
+    /// Có `refresh` thì link hết lượt giữa chừng được native tự đổi (trả về số lần đổi trong `rotations`).
     @objc func downloadFile(_ call: CAPPluginCall) {
         guard let id = call.getString("id"),
               let url = call.getString("url").flatMap(URL.init(string:)), url.scheme == "https",
@@ -180,18 +182,20 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
               Self.isInsideLibrary(destination)
         else { return call.reject("Link hoặc đường dẫn tải không hợp lệ") }
         let headers = call.getObject("headers").map { $0.compactMapValues { $0 as? String } } ?? [:]
+        let start = Int64(max(0, call.getInt("offset") ?? 0))
+        let refresh = StreamRefresh(dictionary: call.getObject("refresh"))
         Task {
             var lastEmit = Date.distantPast
             do {
-                let bytes = try await self.downloader.download(url: url, to: destination, headers: headers) { [weak self] bytes, total in
+                let result = try await self.downloader.download(url: url, to: destination, from: start, headers: headers, refresh: refresh) { [weak self] bytes, total in
                     // Mỗi đoạn 1 MiB báo một lần, tối đa ~4 lần/giây.
                     guard Date().timeIntervalSince(lastEmit) > 0.25 || bytes == total else { return }
                     lastEmit = Date()
                     self?.notifyListeners("downloadProgress", data: ["id": id, "bytes": Int(bytes), "total": Int(total ?? 0)])
                 }
-                call.resolve(["bytes": Int(bytes)])
+                call.resolve(["bytes": Int(result.bytes), "rotations": result.rotations])
             } catch let error as MeloDownloader.HTTPError {
-                call.reject("HTTP \(error.status)", "HTTP_ERROR", nil, ["httpStatus": error.status])
+                call.reject("HTTP \(error.status)", "HTTP_ERROR", nil, ["httpStatus": error.status, "bytes": Int(error.bytes)])
             } catch {
                 call.reject("Tải lỗi: \(describeError(error))", "DOWNLOAD_ERROR", error)
             }

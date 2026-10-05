@@ -80,11 +80,15 @@ public struct PlayerQueue {
     }
 
     /// Cập nhật link/file cho mọi bài cùng id (một bài có thể xuất hiện nhiều lần).
-    /// Chuỗi rỗng ở `fileUrl` nghĩa là xoá file. Trả về true nếu bài đang phát bị ảnh hưởng.
+    /// Chuỗi rỗng ở `fileUrl` nghĩa là xoá file. `refresh` đi kèm link: có `url` mới thì thay luôn cách xin link
+    /// (nil = link này không cần đổi). Trả về true nếu bài đang phát bị ảnh hưởng.
     @discardableResult
-    public mutating func update(id: String, url: String? = nil, fileUrl: String? = nil, headers: [String: String]? = nil) -> Bool {
+    public mutating func update(id: String, url: String? = nil, fileUrl: String? = nil, headers: [String: String]? = nil, refresh: StreamRefresh? = nil) -> Bool {
         for position in items.indices where items[position].id == id {
-            if let url { items[position].url = url }
+            if let url {
+                items[position].url = url
+                items[position].refresh = refresh
+            }
             if let fileUrl { items[position].fileUrl = nonEmpty(fileUrl) }
             if let headers { items[position].headers = headers }
         }

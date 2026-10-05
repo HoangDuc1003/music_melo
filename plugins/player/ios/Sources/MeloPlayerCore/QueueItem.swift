@@ -12,6 +12,8 @@ public struct QueueItem: Equatable {
     /// File đã tải (file://… hoặc đường dẫn tuyệt đối). Ưu tiên nếu file còn tồn tại.
     public var fileUrl: String?
     public var headers: [String: String]
+    /// Cách native tự xin link mới khi `url` hết lượt (đi kèm `url`, xem StreamRefresh).
+    public var refresh: StreamRefresh?
     public var title: String
     public var artist: String
     public var album: String?
@@ -24,6 +26,7 @@ public struct QueueItem: Equatable {
         url: String = "",
         fileUrl: String? = nil,
         headers: [String: String] = [:],
+        refresh: StreamRefresh? = nil,
         title: String = "",
         artist: String = "",
         album: String? = nil,
@@ -34,6 +37,7 @@ public struct QueueItem: Equatable {
         self.url = url
         self.fileUrl = fileUrl.flatMap(nonEmpty)
         self.headers = headers
+        self.refresh = refresh
         self.title = title
         self.artist = artist
         self.album = album.flatMap(nonEmpty)
@@ -49,6 +53,7 @@ public struct QueueItem: Equatable {
             url: dictionary["url"] as? String ?? "",
             fileUrl: dictionary["fileUrl"] as? String,
             headers: stringDictionary(dictionary["headers"]) ?? [:],
+            refresh: StreamRefresh(dictionary: dictionary["refresh"]),
             title: dictionary["title"] as? String ?? "",
             artist: dictionary["artist"] as? String ?? "",
             album: dictionary["album"] as? String,
