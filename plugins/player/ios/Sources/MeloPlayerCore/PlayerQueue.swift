@@ -140,11 +140,15 @@ public struct RetryPolicy {
         return retried.insert(id).inserted ? .requestUrl : .skip
     }
 
-    /// Ghi nhận một lần bỏ qua bài lỗi. Trả về true nếu đã bỏ qua liên tiếp cả hàng chờ
-    /// (mọi bài đều lỗi, ví dụ mất mạng khi đang lặp lại) → phải dừng thay vì chuyển bài mãi.
+    /// Bỏ qua liên tiếp chừng này bài thì dừng: lỗi liền nhiều bài thường do mạng hoặc YouTube chặn, chuyển bài tiếp
+    /// chỉ tốn lượt gọi YouTube (radio còn tự nối thêm bài nên hàng chờ không bao giờ hết).
+    public static let maxConsecutiveSkips = 5
+
+    /// Ghi nhận một lần bỏ qua bài lỗi. Trả về true nếu đã bỏ qua liên tiếp cả hàng chờ (hoặc `maxConsecutiveSkips`
+    /// bài) → phải dừng thay vì chuyển bài mãi.
     public mutating func registerSkip(queueCount: Int) -> Bool {
         consecutiveSkips += 1
-        return consecutiveSkips >= max(queueCount, 1)
+        return consecutiveSkips >= min(max(queueCount, 1), Self.maxConsecutiveSkips)
     }
 
     /// Có bài phát được: đếm lại từ đầu.

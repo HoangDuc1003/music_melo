@@ -31,6 +31,8 @@ final class MeloAudioEngine: NSObject {
     private var currentSourceIsFile = false
     private var interruptedWhilePlaying = false
 
+    /// Tải dữ liệu cho bài đang phát bằng link (AVAssetResourceLoader chỉ giữ tham chiếu yếu tới delegate).
+    private var streamLoader: MeloStreamLoader?
     private var itemObservers: [NSObjectProtocol] = []
     private var itemStatusObservation: NSKeyValueObservation?
     private var timeControlObservation: NSKeyValueObservation?
@@ -236,7 +238,18 @@ final class MeloAudioEngine: NSObject {
             asset = AVURLAsset(url: url)
         case .remote(let url, let headers):
             currentSourceIsFile = false
-            asset = AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
+            // Tải qua URLSession của app (xem MeloStreamLoader): AVPlayer mở thẳng link YouTube thì bị từ chối.
+            let loader = MeloStreamLoader(remote: url, headers: headers) { [weak self] message in
+                DispatchQueue.main.async { self?.log(message) }
+            }
+            if let streamURL = loader.assetURL {
+                let streamAsset = AVURLAsset(url: streamURL)
+                streamAsset.resourceLoader.setDelegate(loader, queue: loader.queue)
+                streamLoader = loader
+                asset = streamAsset
+            } else {
+                asset = AVURLAsset(url: url, options: headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers])
+            }
         }
         let playerItem = AVPlayerItem(asset: asset)
         attach(playerItem)
@@ -313,6 +326,7 @@ final class MeloAudioEngine: NSObject {
     }
 
     private func detachItem() {
+        streamLoader = nil
         itemStatusObservation?.invalidate()
         itemStatusObservation = nil
         itemObservers.forEach { NotificationCenter.default.removeObserver($0) }
@@ -364,7 +378,12 @@ final class MeloAudioEngine: NSObject {
         guard let item = queue.current, !waitingForUrl else { return }
         let position = currentPosition
         let message = error?.localizedDescription ?? "Không phát được bài này"
-        log("Lỗi phát \(item.id) (\(currentSourceIsFile ? "file" : "link")): \(message)")
+        // Chi tiết để chẩn đoán (hiện trong Cài đặt → Nhật ký): miền/mã lỗi gốc và lỗi mạng AVPlayer ghi lại.
+        var detail = error.map(describeError) ?? "không rõ lỗi"
+        if let event = player.currentItem?.errorLog()?.events.last {
+            detail += " • errorLog: \(event.errorDomain) \(event.errorStatusCode) \(event.errorComment ?? "")"
+        }
+        log("Lỗi phát \(item.id) (\(currentSourceIsFile ? "file" : "link")): \(detail)")
         detachItem()
         switch retry.onFailure(id: item.id, usedFile: currentSourceIsFile) {
         case .retryWithoutFile:
@@ -381,8 +400,8 @@ final class MeloAudioEngine: NSObject {
         case .skip:
             emit?("error", ["index": queue.index, "id": item.id, "message": message])
             if retry.registerSkip(queueCount: queue.count) {
-                // Cả hàng chờ đều lỗi (thường do mất mạng): dừng, không chuyển bài mãi.
-                log("Mọi bài đều lỗi: dừng phát")
+                // Nhiều bài liên tiếp đều lỗi (mất mạng, YouTube chặn…): dừng, không chuyển bài mãi.
+                log("Nhiều bài liên tiếp không phát được: dừng phát")
                 retry.reset() // bấm phát lại (khi có mạng) thì mỗi bài lại được xin link mới
                 playWhenReady = false
                 player.replaceCurrentItem(with: nil)

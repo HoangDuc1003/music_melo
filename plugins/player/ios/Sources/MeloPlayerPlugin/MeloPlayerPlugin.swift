@@ -43,7 +43,11 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         engine.emit = { [weak self] event, data in
             self?.notifyListeners(event, data: data)
         }
-        engine.log = { CAPLog.print("[MeloPlayer]", $0) }
+        // Ghi cả vào Nhật ký trong app (Cài đặt → Nhật ký lỗi) để người dùng copy gửi khi có lỗi.
+        engine.log = { [weak self] message in
+            CAPLog.print("[MeloPlayer]", message)
+            self?.notifyListeners("log", data: ["message": message])
+        }
         self.engine = engine
         return engine
     }

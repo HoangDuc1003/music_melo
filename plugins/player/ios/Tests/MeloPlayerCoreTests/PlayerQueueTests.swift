@@ -244,6 +244,13 @@ final class PolicyTests: XCTestCase {
         XCTAssertTrue(policy.registerSkip(queueCount: 0))
     }
 
+    func testStopsAfterFiveSkipsInLongQueue() {
+        // Hàng chờ dài (radio tự nối thêm): lỗi 5 bài liền thì dừng.
+        var policy = RetryPolicy()
+        for _ in 0..<4 { XCTAssertFalse(policy.registerSkip(queueCount: 200)) }
+        XCTAssertTrue(policy.registerSkip(queueCount: 200))
+    }
+
     func testSleepTimer() {
         var timer = SleepTimer()
         let start = Date(timeIntervalSince1970: 1_000)

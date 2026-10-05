@@ -97,5 +97,7 @@ export interface MeloPlayerPlugin {
   addListener(eventName: 'needsUrl', listener: (event: NeedsUrlEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'error', listener: (event: PlayerErrorEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'queueEnded', listener: () => void): Promise<PluginListenerHandle>;
+  /** iPhone: dòng nhật ký của trình phát native (lỗi AVPlayer, lỗi tải đoạn nhạc…) để ghi vào Nhật ký trong app. */
+  addListener(eventName: 'log', listener: (event: { message: string }) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }

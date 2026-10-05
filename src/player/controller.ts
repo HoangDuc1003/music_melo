@@ -639,6 +639,7 @@ export function initPlayer(): Promise<void> {
     await MeloPlayer.addListener('needsUrl', (e) => void onNeedsUrl(e));
     await MeloPlayer.addListener('error', (e) => onError(e));
     await MeloPlayer.addListener('queueEnded', () => void onQueueEnded());
+    await MeloPlayer.addListener('log', (e) => log.info('native', e.message));
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') saveSnapshot();
     });

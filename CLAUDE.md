@@ -220,6 +220,18 @@ TODO (next sessions):
 3. First real-device Spotify test: user creates the Spotify app per docs/SPOTIFY.md; check redirect + Keychain + sync.
 4. Optional: swipe between tabs, haptics, Keyboard plugin (`@capacitor/keyboard`) if the search keyboard misbehaves.
 
+## First real-iPhone report (2026-10-05, user's in-app log, VN)
+- Browsing works (innertube ready). `VISIONOS` → `LOGIN_REQUIRED` "xác nhận bạn không phải là robot" on the phone's IP;
+  `IOS` resolves in ~200 ms **and passes the 1 MB probe** (app-process URLSession, Range header).
+- **AVPlayer opening the googlevideo URL directly failed every track ~0.1 s after the URL was set** ("unknown error" =
+  NSURLErrorDomain −1), needsUrl → same → skip; radio kept appending, so it skipped 25+ tracks in seconds.
+- Fix (unverified until the next log): `MeloStreamLoader.swift` — `AVAssetResourceLoaderDelegate` on a custom scheme
+  `melo-stream:`; every byte range is fetched by the app's own `URLSession` with a `Range` header, ≤ 1 MiB per request
+  (like the probe that works), content info from `Content-Range` / `Content-Type`. Native log lines are now forwarded
+  to JS (`log` event → `log.info('native', …)`) so the in-app log shows AVPlayer error domain/code/underlying errors,
+  `errorLog()` HTTP status, and loader HTTP failures. `RetryPolicy` stops after 5 consecutive skips
+  (`maxConsecutiveSkips`). **Next step: ask the user for the in-app log after installing this build.**
+
 ## Verified YouTube facts (from this PC's VN residential IP, 2026-10-01 — re-run `scripts/probe*.mjs` if broken)
 - Full-file download works **without PO token only with `VISIONOS`**. `IOS`, `ANDROID_VR`, `MWEB`, `YTMUSIC`,
   `TV_SIMPLY` give 403 after the first 1 MiB; `TV` → "Cần tải lại trang này"; `WEB`/`ANDROID` → no URL.
