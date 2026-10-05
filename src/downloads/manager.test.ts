@@ -156,7 +156,9 @@ describe('hàng đợi tải', () => {
     expect(storage.artwork.size).toBe(5);
     expect(mocks.getLyrics).toHaveBeenCalledTimes(5);
     expect(mocks.refreshLocalFile).toHaveBeenCalledTimes(5);
-    expect(storage.requests[0].url).toContain('range=0-999');
+    // Link gốc + dung lượng: nơi lưu tự chọn cách tải (iPhone: plugin tải từng đoạn; trình duyệt: thêm &range).
+    expect(storage.requests[0].url).not.toContain('range=');
+    expect(storage.requests[0].expectedBytes).toBe(1000);
     expect(await localFileUrl(tracks[0].id)).toBe(`file:///music/${tracks[0].id}.m4a`);
     expect(await db.tracks.get(tracks[0].id)).toMatchObject({ title: 'Bài 1' });
   });

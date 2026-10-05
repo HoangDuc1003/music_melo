@@ -27,10 +27,12 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getState", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "keychainGet", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "keychainSet", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "keychainRemove", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "keychainRemove", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "downloadFile", returnType: CAPPluginReturnPromise)
     ]
 
     private var engine: MeloAudioEngine?
+    private let downloader = MeloDownloader()
 
     override public func load() {
         DispatchQueue.main.async { _ = self.ensureEngine() }
@@ -168,6 +170,39 @@ public class MeloPlayerPlugin: CAPPlugin, CAPBridgedPlugin {
         guard let key = call.getString("key"), !key.isEmpty else { return call.reject("Thiếu key") }
         MeloKeychain.remove(key)
         call.resolve()
+    }
+
+    /// Tải file nhạc theo từng đoạn (xem MeloDownloader). Chỉ ghi vào thư mục của app; link phải là https.
+    @objc func downloadFile(_ call: CAPPluginCall) {
+        guard let id = call.getString("id"),
+              let url = call.getString("url").flatMap(URL.init(string:)), url.scheme == "https",
+              let destination = call.getString("path").flatMap(URL.init(string:)), destination.isFileURL,
+              Self.isInsideLibrary(destination)
+        else { return call.reject("Link hoặc đường dẫn tải không hợp lệ") }
+        let headers = call.getObject("headers").map { $0.compactMapValues { $0 as? String } } ?? [:]
+        Task {
+            var lastEmit = Date.distantPast
+            do {
+                let bytes = try await self.downloader.download(url: url, to: destination, headers: headers) { [weak self] bytes, total in
+                    // Mỗi đoạn 1 MiB báo một lần, tối đa ~4 lần/giây.
+                    guard Date().timeIntervalSince(lastEmit) > 0.25 || bytes == total else { return }
+                    lastEmit = Date()
+                    self?.notifyListeners("downloadProgress", data: ["id": id, "bytes": Int(bytes), "total": Int(total ?? 0)])
+                }
+                call.resolve(["bytes": Int(bytes)])
+            } catch let error as MeloDownloader.HTTPError {
+                call.reject("HTTP \(error.status)", "HTTP_ERROR", nil, ["httpStatus": error.status])
+            } catch {
+                call.reject("Tải lỗi: \(describeError(error))", "DOWNLOAD_ERROR", error)
+            }
+        }
+    }
+
+    /// File tải chỉ được nằm trong thư mục Library của app (nơi Filesystem.Directory.LibraryNoCloud trỏ tới).
+    private static func isInsideLibrary(_ file: URL) -> Bool {
+        guard let library = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return false }
+        let folder = file.deletingLastPathComponent().resolvingSymlinksInPath().path
+        return folder.hasPrefix(library.resolvingSymlinksInPath().path)
     }
 
     private func parseItems(_ array: JSArray?) -> [QueueItem] {

@@ -92,6 +92,12 @@ export interface MeloPlayerPlugin {
   keychainSet(options: { key: string; value: string }): Promise<void>;
   keychainRemove(options: { key: string }): Promise<void>;
 
+  /**
+   * iPhone: tải file nhạc về `path` (file:// trong thư mục Library của app) theo từng đoạn Range ≤ 1 MiB.
+   * Link YouTube client IOS bị 403 nếu xin cả file một lần. Lỗi HTTP: `message` "HTTP <mã>", `data.httpStatus`.
+   */
+  downloadFile(options: { id: string; url: string; path: string; headers?: Record<string, string> }): Promise<{ bytes: number }>;
+
   addListener(eventName: 'state', listener: (state: PlayerState) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'itemChanged', listener: (event: ItemChangedEvent) => void): Promise<PluginListenerHandle>;
   addListener(eventName: 'needsUrl', listener: (event: NeedsUrlEvent) => void): Promise<PluginListenerHandle>;
@@ -99,5 +105,6 @@ export interface MeloPlayerPlugin {
   addListener(eventName: 'queueEnded', listener: () => void): Promise<PluginListenerHandle>;
   /** iPhone: dòng nhật ký của trình phát native (lỗi AVPlayer, lỗi tải đoạn nhạc…) để ghi vào Nhật ký trong app. */
   addListener(eventName: 'log', listener: (event: { message: string }) => void): Promise<PluginListenerHandle>;
+  addListener(eventName: 'downloadProgress', listener: (event: { id: string; bytes: number; total: number }) => void): Promise<PluginListenerHandle>;
   removeAllListeners(): Promise<void>;
 }

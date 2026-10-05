@@ -319,6 +319,11 @@ export class MeloPlayerWeb extends WebPlugin implements MeloPlayerPlugin {
     return this.buildState();
   }
 
+  /** Trình duyệt tải bằng fetch (src/downloads/storage.ts), không qua plugin. */
+  async downloadFile(): Promise<{ bytes: number }> {
+    throw this.unavailable('Tải file qua plugin chỉ có trên iPhone');
+  }
+
   // Trình duyệt không có Keychain: dùng localStorage, chỉ để chạy thử trên PC.
   async keychainGet({ key }: { key: string }): Promise<{ value: string | null }> {
     return { value: localStorage.getItem(secureKey(key)) };

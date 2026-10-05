@@ -230,7 +230,15 @@ TODO (next sessions):
   (like the probe that works), content info from `Content-Range` / `Content-Type`. Native log lines are now forwarded
   to JS (`log` event → `log.info('native', …)`) so the in-app log shows AVPlayer error domain/code/underlying errors,
   `errorLog()` HTTP status, and loader HTTP failures. `RetryPolicy` stops after 5 consecutive skips
-  (`maxConsecutiveSkips`). **Next step: ask the user for the in-app log after installing this build.**
+  (`maxConsecutiveSkips`).
+- After that build (0.2.29) the user's screenshot showed **playback working** but downloads stuck at 0 % with "YouTube
+  đang hạn chế, tạm nghỉ 56 giây" (403 → limiter cooldown): FileTransfer fetched the whole file in one request
+  (`&range=0-<n>`), which the IOS-client URL refuses. Fix: `MeloDownloader.swift` + plugin method `downloadFile({id,
+  url, path, headers})` → sequential `Range` chunks ≤ 1 MiB via the app's URLSession into the `.part` file (5xx/network
+  retried ×2 per chunk, 403/429 rejected as `HTTP <code>` + `data.httpStatus` so `classifyFailure` sees "blocked"),
+  `downloadProgress` events ≤ 4/s; destination must be inside the app's Library folder, URL https. `NativeStorage`
+  uses it (FileTransfer only for artwork); `withRange` moved into `WebStorage` (fetch path only).
+  **Next step: ask the user for the in-app log / whether downloads finish after installing this build.**
 
 ## Verified YouTube facts (from this PC's VN residential IP, 2026-10-01 — re-run `scripts/probe*.mjs` if broken)
 - Full-file download works **without PO token only with `VISIONOS`**. `IOS`, `ANDROID_VR`, `MWEB`, `YTMUSIC`,

@@ -5,6 +5,7 @@
 import { Capacitor } from '@capacitor/core';
 import { Directory, Encoding, Filesystem } from '@capacitor/filesystem';
 import { FileTransfer } from '@capacitor/file-transfer';
+import { MeloPlayer } from 'capacitor-melo-player';
 import { memoAsync } from '@/lib/async';
 import { db } from '@/lib/db';
 import { log } from '@/lib/log';
@@ -62,7 +63,10 @@ function assertSafeId(id: string) {
   if (!SAFE_ID.test(id)) throw new Error(`id không hợp lệ: ${id.slice(0, 20)}`);
 }
 
-/** YouTube treo nếu GET cả file không có range → thêm &range=0-<n-1> (xem CLAUDE.md). Nguồn khác giữ nguyên. */
+/**
+ * Tải bằng fetch (trình duyệt, chạy thử trên PC qua proxy dev): YouTube treo nếu GET cả file không có range → thêm
+ * &range=0-<n-1> (xem CLAUDE.md). Nguồn khác giữ nguyên. iPhone thì plugin tự tải từng đoạn.
+ */
 export function withRange(url: string, contentLength: number | undefined): { url: string; headers: Record<string, string> } {
   if (!/(^|\.)googlevideo\.com$/.test(new URL(url).hostname)) return { url, headers: {} };
   if (contentLength && contentLength > 0) {
@@ -79,6 +83,7 @@ const DIR = Directory.LibraryNoCloud;
 const FOLDER = 'music';
 
 class NativeStorage implements DownloadStorage {
+  /** Tiến độ tải theo id bài (sự kiện "downloadProgress" của plugin). */
   private progressHandlers = new Map<string, (p: DownloadProgress) => void>();
   private listening?: Promise<unknown>;
 
@@ -90,10 +95,7 @@ class NativeStorage implements DownloadStorage {
   });
 
   private listen() {
-    this.listening ??= FileTransfer.addListener('progress', (p) => {
-      if (p.type !== 'download') return;
-      this.progressHandlers.get(p.url)?.({ bytes: p.bytes, total: p.lengthComputable ? p.contentLength : 0 });
-    });
+    this.listening ??= MeloPlayer.addListener('downloadProgress', (p) => this.progressHandlers.get(p.id)?.({ bytes: p.bytes, total: p.total }));
     return this.listening;
   }
 
@@ -111,20 +113,12 @@ class NativeStorage implements DownloadStorage {
     await this.listen();
     const base = await this.folderUri();
     const part = `${FOLDER}/${id}.m4a.part`;
-    this.progressHandlers.set(url, onProgress);
+    this.progressHandlers.set(id, onProgress);
     try {
-      await FileTransfer.downloadFile({
-        url,
-        path: `${base}/${id}.m4a.part`,
-        headers,
-        progress: true,
-        connectTimeout: 30_000,
-        readTimeout: 60_000,
-        // Link googlevideo đã được mã hoá sẵn; mã hoá lần nữa sẽ làm hỏng chữ ký.
-        shouldEncodeUrlParams: false
-      });
+      // Plugin tải từng đoạn ≤ 1 MiB bằng URLSession (link YouTube client IOS bị 403 nếu xin cả file một lần).
+      await MeloPlayer.downloadFile({ id, url, path: `${base}/${id}.m4a.part`, headers });
     } finally {
-      this.progressHandlers.delete(url);
+      this.progressHandlers.delete(id);
     }
     const size = (await this.exists(part)) ?? 0;
     if (size < 32 * 1024 || (expectedBytes && size < expectedBytes * 0.98)) {
@@ -231,9 +225,10 @@ async function fetchBlob(url: string, headers: Record<string, string> | undefine
 class WebStorage implements DownloadStorage {
   private urls = new Map<string, string>();
 
-  async saveAudio({ id, url, headers, onProgress }: DownloadRequest): Promise<number> {
+  async saveAudio({ id, url, headers, expectedBytes, onProgress }: DownloadRequest): Promise<number> {
     assertSafeId(id);
-    const audio = await fetchBlob(url, headers, onProgress);
+    const ranged = withRange(url, expectedBytes);
+    const audio = await fetchBlob(ranged.url, { ...headers, ...ranged.headers }, onProgress);
     const existing = await db.blobs.get(id);
     await db.blobs.put({ id, audio, artwork: existing?.artwork });
     this.revoke(id);

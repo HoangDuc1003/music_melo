@@ -12,7 +12,7 @@ import { refreshLocalFile, setArtworkFileProvider, setFileUrlProvider } from '@/
 import { canDownload, resolveAudio } from '@/youtube/stream';
 import type { Track } from '@/youtube/types';
 import { AdaptiveLimiter, classifyFailure, HARD_MAX } from './concurrency';
-import { getStorage, SAFE_ID, withRange, type DownloadProgress } from './storage';
+import { getStorage, SAFE_ID, type DownloadProgress } from './storage';
 
 const AUTO_LIKED_KEY = 'autoDownloadLiked';
 const CONCURRENCY_KEY = 'downloadConcurrency';
@@ -131,11 +131,10 @@ async function downloadAudio(id: string): Promise<{ bytes: number; mimeType?: st
     try {
       // Lần thử lại thì lấy link mới (link cũ có thể đã hết hạn hoặc gắn IP cũ).
       const audio = await resolveGate.run(() => resolveAudio(id, { refresh: attempt > 0, download: true }));
-      const { url, headers } = withRange(audio.url, audio.contentLength);
       const bytes = await getStorage().saveAudio({
         id,
-        url,
-        headers: { ...audio.headers, ...headers },
+        url: audio.url,
+        headers: audio.headers,
         expectedBytes: audio.contentLength,
         onProgress: (p) => setProgress(id, { bytes: p.bytes, total: p.total || audio.contentLength || 0 })
       });
